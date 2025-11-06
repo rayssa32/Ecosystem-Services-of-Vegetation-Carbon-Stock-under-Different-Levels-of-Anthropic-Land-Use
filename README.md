@@ -1,170 +1,168 @@
-# Análise de Serviços Ecossistêmicos de Estoque de Carbono da Vegetação
+# Analysis of Vegetation Carbon Stock Ecosystem Services
 
-Este repositório contém o código e a descrição metodológica da etapa analítica da pesquisa **“Serviços Ecossistêmicos de Estoque de Carbono da Vegetação sob Diferentes Intensidades de Uso Antrópico”**.
+This repository contains the code and methodological description of the analytical stage of the research **“Vegetation Carbon Stock Ecosystem Services under Different Intensities of Anthropogenic Use”**.
 
-O objetivo desta etapa é comparar **GPP**, **NPP** e **Biomassa** em relação aos diferentes **usos do solo** identificados por meio de uma **classificação supervisionada** de imagens Sentinel-2.  
-Os dados foram cruzados com produtos MODIS em formato TIFF e analisados por meio do script `modoA_analise_stats_v2.py`.
+The objective of this stage is to compare **GPP**, **NPP**, and **Biomass** in relation to different **land uses** identified through a **supervised classification** of Sentinel-2 images.  
+The data were cross-referenced with MODIS products in TIFF format and analyzed using the script `modoA_analise_stats_v2.py`.
 
+## 1. General description of the code
 
-## 1. Descrição geral do código
+The script performs the **spatial intersection** between:
 
-O script realiza o **cruzamento espacial** entre:
+- **Land use and land cover raster** (Sentinel-2 classification / QGIS);
+- **MODIS metric rasters** (GPP, NPP, and Biomass);
+- **Municipality shapefile**.
 
-- **Raster de uso e cobertura do solo** (classificação Sentinel-2 / QGIS);
-- **Rasters métricos MODIS** (GPP, NPP e Biomassa);
-- **Shapefile de municípios**.
+### Main steps performed
 
-### Principais etapas executadas
-
-1. **Recorte e reprojeção** dos rasters métricos para o CRS e grid do raster de classes (uso do solo);
-2. **Extração de estatísticas** (média, mediana, desvio padrão, soma e contagem) por classe e município;
-3. **Cálculo de totais** (soma × área de pixel);
-4. **Testes estatísticos inferenciais** (ANOVA ou Kruskal–Wallis, conforme pressupostos);
-5. **Testes pós-hoc** (Tukey HSD ou Dunn–Holm);
-6. **Cálculo de tamanhos de efeito** (η² e ε²);
-7. **Geração de gráficos** com anotações de p-valor e tamanho de efeito;
-8. **Exportação** dos resultados e gráficos por município e métrica.
-
-
-
-## 2. Funções analíticas principais
-
-| Função | Descrição |
-|--------|------------|
-| `_summarize_by_classes` | Calcula média, mediana, std, soma e contagem por classe |
-| `_sample_per_class` | Amostragem aleatória estratificada por classe (até 5000 pixels) |
-| `shapiro` | Teste de normalidade (por grupo) |
-| `levene` | Teste de homogeneidade de variâncias |
-| `f_oneway` | ANOVA one-way (caso normalidade + homocedasticidade satisfeitas) |
-| `kruskal` | Teste de Kruskal–Wallis (caso não atendidos) |
-| `pairwise_tukeyhsd` | Pós-hoc Tukey HSD (para ANOVA) |
-| `posthoc_dunn` | Pós-hoc Dunn com ajuste Holm (para Kruskal) |
-| `_effect_sizes_anova` | Calcula η² (ANOVA) |
-| `_effect_size_kruskal` | Calcula ε² (Kruskal) |
-| `_barplot_with_annotation` | Gera gráfico de barras (média ± std) com anotações de p e efeito |
-| `WarpedVRT` | Reprojeção dos rasters MODIS para o CRS do raster de classes |
-| `gdf.to_crs()` | Reprojeção do shapefile de municípios para o CRS do raster de classes |
+1. **Cropping and reprojection** of the metric rasters to the CRS and grid of the class (land use) raster;
+2. **Extraction of statistics** (mean, median, standard deviation, sum, and count) by class and municipality;
+3. **Calculation of totals** (sum × pixel area);
+4. **Inferential statistical tests** (ANOVA or Kruskal–Wallis, depending on assumptions);
+5. **Post-hoc tests** (Tukey HSD or Dunn–Holm);
+6. **Calculation of effect sizes** (η² and ε²);
+7. **Generation of plots** with p-value and effect size annotations;
+8. **Export** of results and plots by municipality and metric.
 
 
 
-## 3. Correção de CRS
+## 2. Main analytical functions
 
-O **raster de classes (Sentinel)** é a **referência** do sistema de coordenadas.  
-O código **não reprojeta** esse raster internamente — ele deve estar **em CRS projetado (metros)** antes da execução.
-
-As demais correções são feitas automaticamente:
-- **Rasters MODIS:** reprojetados com `WarpedVRT` para o CRS/transform do raster de classes;
-- **Shapefile de municípios:** reprojetado com `gdf.to_crs(src_class.crs)`.
-
-> 🔸 Se o raster de classes não estiver em CRS projetado, o script lançará um erro.
-
-
-
-## 4. Gráficos e visualizações
-
-### Gráficos gerados pelo código
-- Gráficos de **barras (média ± desvio padrão)** com legenda contendo:
-  - tipo de teste (ANOVA ou Kruskal);
-  - p-value global;
-  - tamanho de efeito (η² ou ε²).
-
-### Limitações
-- Ocultam a **distribuição completa** dos dados (assimetria e outliers);
-- O uso do desvio padrão pode ser substituído pelo erro padrão (SEM);
-- Podem não representar adequadamente métricas não-normais.
-
-### Gráficos recomendados
-| Objetivo | Gráfico sugerido |
-|-----------|------------------|
-| Comparar classes | **Boxplot** ou **Violin plot** (com pontos jitter) |
-| Visualizar correlação entre métricas | **Scatter plot** (com regressão e R²) |
-| Comparar métricas múltiplas | **Heatmap** ou **Faceted boxplots** |
-| Destacar diferenças significativas | **Boxplot com letras de agrupamento** (a/b/c) do pós-hoc |
+| Function | Description |
+|----------|-------------|
+| `_summarize_by_classes` | Calculates mean, median, std, sum, and count per class |
+| `_sample_per_class` | Stratified random sampling per class (up to 5000 pixels) |
+| `shapiro` | Normality test (per group) |
+| `levene` | Homogeneity of variances test |
+| `f_oneway` | One-way ANOVA (if normality + homoscedasticity are satisfied) |
+| `kruskal` | Kruskal–Wallis test (if assumptions are not met) |
+| `pairwise_tukeyhsd` | Tukey HSD post-hoc (for ANOVA) |
+| `posthoc_dunn` | Dunn post-hoc with Holm adjustment (for Kruskal) |
+| `_effect_sizes_anova` | Calculates η² (ANOVA) |
+| `_effect_size_kruskal` | Calculates ε² (Kruskal) |
+| `_barplot_with_annotation` | Generates bar plot (mean ± std) with p-value and effect annotations |
+| `WarpedVRT` | Reprojects MODIS rasters to the CRS of the class raster |
+| `gdf.to_crs()` | Reprojects the municipality shapefile to the CRS of the class raster |
 
 
 
-## 5. Métodos estatísticos utilizados
+## 3. CRS correction
 
-### Diagnóstico de pressupostos
-- **Normalidade:** `shapiro`
-- **Homocedasticidade:** `levene (center='median')`
+The **class raster (Sentinel)** is the **coordinate system reference**.  
+The code **does not reproject** this raster internally — it must already be **in a projected CRS (meters)** before execution.
 
-### Testes principais
-- **ANOVA one-way:** `f_oneway`
+Other corrections are done automatically:
+- **MODIS rasters:** reprojected with `WarpedVRT` to the CRS/transform of the class raster;
+- **Municipality shapefile:** reprojected with `gdf.to_crs(src_class.crs)`.
+
+> 🔸 If the class raster is not in a projected CRS, the script will throw an error.
+
+
+## 4. Plots and visualizations
+
+### Plots generated by the code
+- **Bar plots (mean ± standard deviation)** with legend including:
+  - test type (ANOVA or Kruskal);
+  - global p-value;
+  - effect size (η² or ε²).
+
+### Limitations
+- They hide the **full distribution** of the data (skewness and outliers);
+- Use of standard deviation may be replaced by standard error of the mean (SEM);
+- May not adequately represent non-normal metrics.
+
+### Recommended plots
+| Objective | Suggested plot |
+|-----------|----------------|
+| Compare classes | **Boxplot** or **Violin plot** (with jittered points) |
+| Visualize correlation between metrics | **Scatter plot** (with regression and R²) |
+| Compare multiple metrics | **Heatmap** or **Faceted boxplots** |
+| Highlight significant differences | **Boxplot with grouping letters** (a/b/c) from post-hoc |
+
+
+## 5. Statistical methods used
+
+### Assumption diagnostics
+- **Normality:** `shapiro`
+- **Homoscedasticity:** `levene (center='median')`
+
+### Main tests
+- **One-way ANOVA:** `f_oneway`
 - **Kruskal–Wallis:** `kruskal`
 
-### Pós-hoc
+### Post-hoc
 - **Tukey HSD:** `pairwise_tukeyhsd`  
 - **Dunn–Holm:** `scikit_posthocs.posthoc_dunn(method='holm')`
 
-### Tamanhos de efeito
-- **η² (eta squared):** medida de magnitude do efeito (ANOVA)  
-- **ε² (epsilon squared):** medida aproximada (Kruskal)
+### Effect sizes
+- **η² (eta squared):** measure of effect magnitude (ANOVA)  
+- **ε² (epsilon squared):** approximate measure (Kruskal)
 
 
 
-## 6. Confiabilidade dos resultados
+## 6. Reliability of results
 
-Os testes aplicados são **estatisticamente adequados** para comparar métricas entre classes, **desde que**:
+The applied tests are **statistically appropriate** for comparing metrics between classes, **as long as**:
 
-- Os dados amostrados representem observações independentes;
-- As unidades e escalas (GPP, NPP, Biomassa) sejam compatíveis;
-- O CRS e a resolução espacial estejam corrigidos.
+- Sampled data represent independent observations;
+- Units and scales (GPP, NPP, Biomass) are compatible;
+- CRS and spatial resolution are correctly aligned.
 
-### Fatores que podem afetar a confiabilidade
-1. **Autocorrelação espacial:** pixels próximos não são independentes.  
-   - Solução: calcular Moran’s I, agregar por patch ou usar modelos espaciais.
-2. **Amostragem por pixel:** pode superestimar o poder do teste.
-3. **Unidades:** confirmar unidade original (gC/m², Mg/ha, etc.) antes de interpretar totais.
-4. **Testes múltiplos entre cidades:** ajustar p-values (Bonferroni/FDR) se houver comparações múltiplas.
-
-
-
-## 7. Tipos de confiabilidade e justificativa dos testes
-
-| Teste / Procedimento | Finalidade | Necessidade |
-|-----------------------|-------------|--------------|
-| **Shapiro** | Verifica normalidade dos grupos | Necessário (para ANOVA) |
-| **Levene** | Verifica homogeneidade das variâncias | Necessário (para ANOVA) |
-| **ANOVA** | Compara médias (paramétrico) | Adequado se pressupostos válidos |
-| **Kruskal–Wallis** | Compara medianas (não paramétrico) | Alternativa robusta |
-| **Tukey / Dunn** | Identifica diferenças par a par | Indispensável para interpretação |
-| **η² / ε²** | Mede magnitude do efeito | Fortemente recomendado |
+### Factors that may affect reliability
+1. **Spatial autocorrelation:** nearby pixels are not independent.  
+   - Solution: calculate Moran’s I, aggregate by patch, or use spatial models.
+2. **Pixel-level sampling:** may overestimate test power.
+3. **Units:** confirm original units (gC/m², Mg/ha, etc.) before interpreting totals.
+4. **Multiple testing across cities:** adjust p-values (Bonferroni/FDR) if multiple comparisons are made.
 
 
 
-## 8. Recomendações práticas
+## 7. Types of reliability and test justification
 
-1. **Garantir CRS projetado** para o raster de classificação (em metros);
-2. **Verificar unidades** de GPP/NPP/Biomassa antes de interpretar totais;
-3. **Complementar gráficos** de barras com boxplots ou violin plots;
-4. **Testar autocorrelação espacial** (Moran’s I);
-5. **Agregação por patch** para reduzir dependência espacial;
-6. **Modelos hierárquicos (GLMM)** se quiser comparar todas as cidades simultaneamente;
-7. **Apresentar IC95% e tamanhos de efeito** nos resultados.
-
-
-
-## 9. Extensões sugeridas
-
-- [ ] Substituir `_barplot_with_annotation` por uma função que gere **boxplots + pontos + letras de pós-hoc**  
-- [ ] Adicionar cálculo de **Moran’s I** por município  
-- [ ] Criar **gráficos de dispersão** (GPP × NPP × Biomassa) com correlação de Pearson e Spearman  
-- [ ] Implementar **ajuste para múltiplos testes** entre municípios  
-- [ ] Permitir **modelos lineares mistos** (cidade como efeito aleatório)
+| Test / Procedure | Purpose | Requirement |
+|------------------|---------|-------------|
+| **Shapiro** | Checks normality of groups | Necessary (for ANOVA) |
+| **Levene** | Checks homogeneity of variances | Necessary (for ANOVA) |
+| **ANOVA** | Compares means (parametric) | Appropriate if assumptions are valid |
+| **Kruskal–Wallis** | Compares medians (non-parametric) | Robust alternative |
+| **Tukey / Dunn** | Identifies pairwise differences | Essential for interpretation |
+| **η² / ε²** | Measures effect magnitude | Strongly recommended |
 
 
 
-## 10. Saídas geradas
-   - `./dados_gerados/<Cidade>_stats_por_classe.csv`  
+## 8. Practical recommendations
+
+1. **Ensure projected CRS** for the classification raster (in meters);
+2. **Verify units** of GPP/NPP/Biomass before interpreting totals;
+3. **Complement bar plots** with boxplots or violin plots;
+4. **Test spatial autocorrelation** (Moran’s I);
+5. **Aggregate by patch** to reduce spatial dependence;
+6. Use **hierarchical models (GLMMs)** if comparing all cities simultaneously;
+7. **Report 95% CI and effect sizes** in results.
+
+
+
+
+## 9. Suggested extensions
+
+- [ ] Replace `_barplot_with_annotation` with a function that generates **boxplots + points + post-hoc letters**  
+- [ ] Add **Moran’s I** calculation per municipality  
+- [ ] Create **scatter plots** (GPP × NPP × Biomass) with Pearson and Spearman correlations  
+- [ ] Implement **multiple testing correction** between municipalities  
+- [ ] Allow **mixed linear models** (city as a random effect)
+
+
+
+## 10. Outputs generated
+   - `./dados_gerados/<City>_stats_por_classe.csv`  
    - `./dados_gerados/todas_cidades_stats_por_classe.csv`  
    - `./dados_gerados/stats/resumo_inferencial_por_cidade.csv`  
-   - Gráficos PNG por cidade e métrica, com anotação de significância.
+   - PNG plots per city and metric, with significance annotation.
 
 
-## Estrutura Recomendada
+## Recommended structure
 
-Para organização e testes futuros, a estrutura modular ideal seria:
+For organization and future testing, the ideal modular structure would be:
 
 ```
 geostats_mode_a/
@@ -177,16 +175,17 @@ geostats_mode_a/
 └─ cli.py
 ```
 
-> O `main.py` atual já contém toda a lógica consolidada. A modularização é opcional.
+
+> The current `main.py` already contains all consolidated logic. Modularization is optional.
 
 
 
-## Requisitos
+## Requirements
 
-### Linguagem
+### Language
 - Python **3.10+**
 
-### Bibliotecas
+### Libraries
 - `numpy`
 - `pandas`
 - `rasterio`
@@ -198,9 +197,9 @@ geostats_mode_a/
 - `scikit-posthocs`
 - `matplotlib`
 
-## Instalação
+## Installation
 
-Instale todas as dependências globalmente para o seu usuário:
+Install all dependencies globally for your user:
 
 ```bash
 pip install --user numpy pandas rasterio geopandas shapely affine scipy statsmodels scikit-posthocs matplotlib
@@ -208,9 +207,9 @@ pip install --user numpy pandas rasterio geopandas shapely affine scipy statsmod
 
 
 
-## Como Executar
+## How to Run
 
-1. **Ajuste os caminhos no início do arquivo `main.py`:**
+1. **Adjust the paths at the beginning of the `main.py`:**
 
    ```python
    class_raster_path = "classificacao/no_clouds2.tif"
@@ -224,7 +223,7 @@ pip install --user numpy pandas rasterio geopandas shapely affine scipy statsmod
    class_map = {1: "Vegetação", 2: "Urbano", 3: "Água", 4: "Solo"}
    ```
 
-2. **(Opcional) Configure os parâmetros globais no topo:**
+2. **(Optional) Configure the global parameters at the top:**
 
    * `RESAMPLE_METRICS = "nearest"`
    * `MAKE_PLOTS = True`
@@ -233,51 +232,53 @@ pip install --user numpy pandas rasterio geopandas shapely affine scipy statsmod
    * `SAMPLE_PER_CLASS = 5000`
    * `ALPHA = 0.05`
 
-3. **Execute o script:**
+3. **Run the script:**
 
    ```bash
    python main.py
    ```
 
-4. **Verifique as saídas na pasta `dados_gerados/`.**
+4. **Check the outputs in the folder `dados_gerados/`.**
 
 
 
-## Interpretação dos Resultados
+## Interpretation of Results
 
-| Tipo de saída                                                                         | Descrição                                                     |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `*_stats_por_classe.csv`                                                              | Estatísticas descritivas por classe e métrica.                |
-| `todas_cidades_stats_por_classe.csv`                                                  | Todas as cidades combinadas.                                  |
-| `resumo_inferencial_por_cidade.csv`                                                   | Síntese: cidade, métrica, teste global, p, tamanho de efeito. |
-| `pairwise_<cidade>_<metrica>_tukey.csv` / `pairwise_<cidade>_<metrica>_dunn_holm.csv` | Comparações par-a-par (pós-hoc).                              |
-| Gráficos PNG                                                                          | Médias por classe com caixa de anotação (teste/p/efeito).     |
+| Output type                                                                           | Description                                                   |
+|---------------------------------------------------------------------------------------|---------------------------------------------------------------|
+| `*_stats_por_classe.csv`                                                              | Descriptive statistics by class and metric.                   |
+| `todas_cidades_stats_por_classe.csv`                                                  | All cities combined.                                          |
+| `resumo_inferencial_por_cidade.csv`                                                   | Summary: city, metric, global test, p-value, effect size.     |
+| `pairwise_<city>_<metric>_tukey.csv` / `pairwise_<city>_<metric>_dunn_holm.csv`       | Pairwise comparisons (post-hoc).                              |
+| PNG plots                                                                             | Means per class with annotation box (test/p/effect).          |
 
-**Anotação no gráfico:**
+
+**Annotation in the plot:**
 
 ```
 ANOVA
 p = 0.034   η² = 0.62   ★
 ```
 
-> A estrela `★` indica significância (p < 0.05).
-> η² é o tamanho de efeito da ANOVA, ε² o do Kruskal–Wallis.
+
+> The star `★` indicates significance (p < 0.05).  
+> η² is the effect size for ANOVA, ε² for Kruskal–Wallis.
 
 ---
 
-## Dicas de Solução de Problemas
+## Troubleshooting Tips
 
-| Problema                                | Causa provável                       | Solução                                  |
-| --------------------------------------- | ------------------------------------ | ---------------------------------------- |
-| `ValueError: geometries do not overlap` | Polígono fora do raster              | Verifique o CRS e extensão dos dados     |
-| CSVs vazios                             | Classe sem pixels válidos            | Confirme `nodata` e máscara              |
-| Gráficos sem barras                     | `MAKE_PLOTS=False` ou falta de dados | Ative flag e revise os rasters           |
-| ImportError (rasterio/geopandas)        | Falta de libs GDAL/Fiona             | Instale via conda-forge                  |
-| P-valores = NaN                         | Classes pequenas (<10 amostras)      | Aumente `MIN_N_FOR_TESTS` ou amplie área |
+| Problem                                 | Likely cause                          | Solution                                 |
+|-----------------------------------------|----------------------------------------|-------------------------------------------|
+| `ValueError: geometries do not overlap` | Polygon outside raster extent          | Check CRS and data extent                 |
+| Empty CSVs                              | Class with no valid pixels             | Confirm `nodata` and mask                 |
+| Plots without bars                      | `MAKE_PLOTS=False` or missing data     | Enable flag and review rasters            |
+| ImportError (rasterio/geopandas)        | Missing GDAL/Fiona libraries           | Install via conda-forge                   |
+| P-values = NaN                          | Small classes (<10 samples)            | Increase `MIN_N_FOR_TESTS` or expand area |
 
 ---
 
-## Referências estatísticas
+## Statistical References
 
 - **Field, A. (2018)**. *Discovering Statistics Using R.* SAGE.  
 - **Zar, J. H. (2010)**. *Biostatistical Analysis.* Pearson.  
@@ -286,9 +287,21 @@ p = 0.034   η² = 0.62   ★
 
 
 
-## Script Autor/coautor
+## Script Author/co-author
 
-**Rayssa de Oliveira Dias e Luiz Felipe Sá**
+**Rayssa de Oliveira Dias and Luiz Felipe Sá**
+ ---
+
+ 
+## License
+
+This project is shared under the **Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 License (CC BY-NC-ND 4.0)**.
+
+You may copy and redistribute the script with proper attribution, but commercial use and modification are prohibited without permission. See the `LICENSE` file for details.
+
+> Note: This workflow is part of an active research project. The repository is temporarily licensed under supervisory rights due to an ongoing publication process. License terms may change upon official publication.
+
+---
  
 
 
