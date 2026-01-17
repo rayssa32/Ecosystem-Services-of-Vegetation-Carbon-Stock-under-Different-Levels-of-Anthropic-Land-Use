@@ -102,27 +102,33 @@ class RasterLoader:
         shape: Tuple[int, int],
     ) -> np.ndarray:
         """Clip metric raster and align to classification grid.
+        
+        This method automatically reprojects and resamples the metric raster to match
+        the classification grid. For example, if biomass is 500m/pixel and LULC is 10m/pixel,
+        the biomass will be resampled to 10m/pixel using the specified resampling method.
 
         Args:
-            src_metric: Open rasterio dataset for metric
-            src_class: Open rasterio dataset for classification (for CRS reference)
+            src_metric: Open rasterio dataset for metric (e.g., biomass at 500m/pixel)
+            src_class: Open rasterio dataset for classification (e.g., LULC at 10m/pixel)
             geometry: Geometry in GeoJSON format
-            class_transform: Transform from classification clip
-            shape: Shape (height, width) from classification clip
+            class_transform: Transform from classification clip (defines target resolution)
+            shape: Shape (height, width) from classification clip (defines target dimensions)
 
         Returns:
-            Clipped and aligned metric array
+            Clipped and resampled metric array at classification grid resolution
         """
         SENTINEL = np.float32(-3.4e38)
 
-        # Use WarpedVRT to ensure alignment with classification grid
+        # Use WarpedVRT to reproject and resample metric raster to classification grid
+        # This automatically converts from source resolution (e.g., 500m/pixel) 
+        # to target resolution (e.g., 10m/pixel) based on class_transform
         with WarpedVRT(
             src_metric,
             crs=src_class.crs,
-            transform=class_transform,
-            width=shape[1],
-            height=shape[0],
-            resampling=self._resampling,
+            transform=class_transform,  # Target transform (10m/pixel from LULC)
+            width=shape[1],  # Target width from LULC
+            height=shape[0],  # Target height from LULC
+            resampling=self._resampling,  # Resampling method (e.g., bilinear for upsampling)
             src_nodata=src_metric.nodata,
             dst_nodata=float(SENTINEL),
         ) as vrt:

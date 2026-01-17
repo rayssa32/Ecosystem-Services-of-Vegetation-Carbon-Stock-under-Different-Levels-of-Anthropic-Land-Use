@@ -15,6 +15,7 @@ from ..data.vector_loader import VectorLoader
 from ..processing.aggregator import DataAggregator
 from ..processing.statistics import StatisticsAnalyzer
 from ..visualization.graphics_factory import GraphicsFactory
+from ..visualization.plotter import ViolinPlotter
 from ..utils.raster_utils import pixel_area_from_transform
 from ..utils.constants import CLASS_COLORS
 
@@ -258,3 +259,87 @@ class AnalysisPipeline:
             print(f"[OK] Inferential summary: {infer_path}")
 
         return combined
+
+    def run_violin_plots_analysis(
+        self,
+        class_raster_path: str,
+        biomass_raster_path: str,
+        vector_cities_path: str,
+        city_field: str = "municipio",
+        class_map: Optional[Dict[int, str]] = None,
+    ) -> None:
+        """Run analysis to generate violin plots for biomass by land use class per city.
+
+        Args:
+            class_raster_path: Path to classification raster (LULC)
+            biomass_raster_path: Path to biomass raster
+            vector_cities_path: Path to cities shapefile
+            city_field: Field name containing city names
+            class_map: Optional mapping from class codes to names
+        """
+        # Validate paths
+        all_paths = [class_raster_path, biomass_raster_path, vector_cities_path]
+        self.raster_loader.validate_paths(all_paths)
+
+        # Create output directory
+        os.makedirs(self.config.outdir, exist_ok=True)
+
+        # Main processing loop
+        with self.raster_loader.load_classification_raster(
+            class_raster_path
+        ) as src_class, rasterio.open(biomass_raster_path) as src_biomass:
+            # Load and reproject cities
+            gdf = self.vector_loader.load_cities(
+                vector_cities_path, city_field, src_class.crs
+            )
+
+            # Process each city
+            for _, row in gdf.iterrows():
+                city = str(row[city_field]).strip()
+
+                if row.geometry is None or row.geometry.is_empty:
+                    continue
+
+                geom = [mapping(row.geometry)]
+
+                # Clip classification
+                try:
+                    class_clip, class_transform = self.raster_loader.clip_classification(
+                        src_class, geom
+                    )
+                except ValueError:
+                    continue  # Skip cities outside raster bounds
+
+                # Clip and reproject biomass to match classification grid
+                biomass_clip = self.raster_loader.clip_metric_raster(
+                    src_biomass,
+                    src_class,
+                    geom,
+                    class_transform,
+                    class_clip.shape,
+                )
+
+                # Run Kruskal-Wallis test
+                test_results = self.statistics.run_kruskal_wallis_test(
+                    biomass_clip, class_clip, class_map
+                )
+
+                # Generate violin plot
+                plotter = self.graphics.create_plotter("violin")
+                # ViolinPlotter uses plot_with_raw_data for raw array visualization
+                violin_plotter = plotter.plotter
+                if isinstance(violin_plotter, ViolinPlotter):
+                    violin_plotter.plot_with_raw_data(
+                        biomass_clip,
+                        class_clip,
+                        "Biomass",
+                        city,
+                        class_map,
+                        self.config.outdir,
+                        annotation=test_results,
+                    )
+                    print(f"[OK] Violin plot generated for {city}")
+                else:
+                    print(f"[Warning] Expected ViolinPlotter, got {type(violin_plotter).__name__}")
+
+            print("[OK] All violin plots generated")
