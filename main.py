@@ -14,7 +14,7 @@ from src import AnalysisConfig, AnalysisPipeline
 def main() -> None:
     """Main entry point for the analysis pipeline."""
     # >>>>>>>>>>>> CONFIGURE YOUR PATHS HERE <<<<<<<<<<<<
-    class_raster_path = "classificacao/no_clouds2.tif"
+    class_raster_path = "classificacao/LULC_7_cidades_2025-07-10_2025-07-30_projected.tif"
     metrics_rasters = {
         "GPP": "metricas/GPP_sete_cidades.tif",
         "NPP": "metricas/NPP_sete_cidades.tif",
@@ -22,7 +22,15 @@ def main() -> None:
     }
     vector_cities_path = "shapefile/sete_cidades.shp"
     city_field = "NM_MUN"
-    class_map = {1: "Vegetação", 2: "Urbano", 3: "Água", 4: "Solo"}
+    # New classification: 0-Água | 1-Urbano | 2-Solo | 3-Vegetação | 4-Agro/Pasto
+    # Colors: ['#3b83bd', '#8c8c8c', '#c8a165', '#2ca25f', '#a1d99b']
+    class_map = {
+        0: "Água",
+        1: "Urbano",
+        2: "Solo",
+        3: "Vegetação",
+        4: "Agro/Pasto",
+    }
 
     # Configure analysis parameters
     config = AnalysisConfig(
@@ -36,7 +44,7 @@ def main() -> None:
         #   plot_types=["violin"]        # Only violin plots
         plot_types=["bar"],
         run_inferential_tests=True,
-        exclude_classes=[5],
+        exclude_classes=[],  # No classes to exclude with new classification scheme
         sample_per_class=5000,
         min_n_for_tests=10,
         alpha=0.05,

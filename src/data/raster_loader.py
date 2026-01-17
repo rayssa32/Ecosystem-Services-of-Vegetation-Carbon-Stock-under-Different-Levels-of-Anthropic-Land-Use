@@ -52,7 +52,13 @@ class RasterLoader:
         """
         src = rasterio.open(path)
         if not (src.crs and src.crs.is_projected):
-            raise ValueError("Classification raster must be in projected CRS (meters).")
+            current_crs = src.crs if src.crs else "Not defined"
+            raise ValueError(
+                f"Classification raster must be in a projected CRS (meters), "
+                f"but found: {current_crs}. "
+                f"Please reproject your raster to a projected CRS (e.g., UTM). "
+                f"For Brazil, consider EPSG:32723 (UTM 23S) or EPSG:5880 (SIRGAS 2000)."
+            )
         return src
 
     def clip_classification(
