@@ -191,9 +191,9 @@ results/
 *.bak
 *.backup
 
-## Large data files (uncomment if you don't want to track data files)
-# classificacao/*.tif
-# metricas/*.tif
+## Large data files (excluded from version control)
+classificacao/*.tif
+metricas/*.tif
 # shapefile/*.shp
 # shapefile/*.shx
 # shapefile/*.dbf
