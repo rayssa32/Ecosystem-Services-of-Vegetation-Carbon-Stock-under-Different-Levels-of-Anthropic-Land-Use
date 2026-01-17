@@ -15,6 +15,10 @@ class AnalysisConfig:
     make_plots: bool = True
     outdir: str = "./dados_gerados"
     plot_types: List[str] = None  # List of plot types: "bar", "box", "violin"
+    make_stacked_bar_charts: bool = True  # Generate stacked bar charts comparing cities
+    stacked_bar_value_type: str = "mean"  # Value type for stacked bars: "mean", "sum", "count", "total_kg"
+    stacked_bar_normalize: bool = False  # Normalize stacked bars to percentages
+    save_csv_files: bool = True  # Save CSV files with statistics (set False to generate only images)
 
     # Statistical tests configuration
     run_inferential_tests: bool = True

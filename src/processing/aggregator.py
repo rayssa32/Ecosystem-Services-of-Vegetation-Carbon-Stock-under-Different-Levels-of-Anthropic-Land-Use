@@ -106,3 +106,32 @@ class DataAggregator:
             df["classe_nome"] = df["classe"].map(class_map).fillna(df["classe"].astype(str))
 
         return df
+
+    @staticmethod
+    def calculate_class_area_percentages(classes: np.ndarray) -> pd.DataFrame:
+        """Calculate percentage area covered by each land use class.
+
+        Args:
+            classes: Classification array
+
+        Returns:
+            DataFrame with classe and percentage columns
+        """
+        # Remove NaN values
+        mask = ~np.isnan(classes)
+        if not mask.any():
+            return pd.DataFrame(columns=["classe", "percentage"])
+
+        cls = classes[mask].astype(int)
+        
+        # Count pixels per class
+        unique, counts = np.unique(cls, return_counts=True)
+        total_pixels = cls.size
+        
+        # Calculate percentages
+        percentages = (counts / total_pixels) * 100
+        
+        df = pd.DataFrame({"classe": unique, "percentage": percentages})
+        df = df.sort_values("classe")
+        
+        return df

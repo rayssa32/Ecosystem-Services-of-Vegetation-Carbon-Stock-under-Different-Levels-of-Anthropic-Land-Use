@@ -5,7 +5,14 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from ..config import AnalysisConfig
-from .plotter import Plotter, BasePlotter, BarPlotter, BoxPlotter, ViolinPlotter
+from .plotter import (
+    Plotter,
+    BasePlotter,
+    BarPlotter,
+    BoxPlotter,
+    ViolinPlotter,
+    StackedBarPlotter,
+)
 
 
 class GraphicsFactory:
@@ -83,6 +90,42 @@ class GraphicsFactory:
         # TODO: Implement multi-metric comparison visualization
         # This would show multiple metrics side-by-side for comparison
         pass
+
+    def create_stacked_bar_plotter(
+        self, class_colors: Optional[Dict[int, str]] = None
+    ) -> StackedBarPlotter:
+        """Create a stacked bar plotter instance.
+
+        Args:
+            class_colors: Optional dictionary mapping class codes to hex colors
+
+        Returns:
+            StackedBarPlotter instance
+        """
+        return StackedBarPlotter(self.config, class_colors)
+
+    def generate_stacked_bar_charts(
+        self,
+        combined_df: pd.DataFrame,
+        metrics: List[str],
+        outdir: str,
+        value_type: str = "mean",
+        normalize: bool = False,
+        class_colors: Optional[Dict[int, str]] = None,
+    ) -> None:
+        """Generate stacked bar charts for all metrics.
+
+        Args:
+            combined_df: Combined DataFrame with statistics from all cities
+            metrics: List of metric names to plot
+            outdir: Output directory
+            value_type: Type of value to plot ("mean", "sum", "count", "total_kg")
+            normalize: If True, normalize to percentages (0-100), otherwise use absolute values
+            class_colors: Optional dictionary mapping class codes to hex colors
+        """
+        plotter = self.create_stacked_bar_plotter(class_colors)
+        for metric in metrics:
+            plotter.plot(combined_df, metric, outdir, value_type, normalize)
 
     def register_custom_plotter(self, plot_type: str, plotter: BasePlotter) -> None:
         """Register a custom plotter type for extensibility.

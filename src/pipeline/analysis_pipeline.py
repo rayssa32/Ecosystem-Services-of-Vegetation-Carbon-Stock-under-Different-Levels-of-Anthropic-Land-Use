@@ -16,6 +16,7 @@ from ..processing.aggregator import DataAggregator
 from ..processing.statistics import StatisticsAnalyzer
 from ..visualization.graphics_factory import GraphicsFactory
 from ..utils.raster_utils import pixel_area_from_transform
+from ..utils.constants import CLASS_COLORS
 
 
 class AnalysisPipeline:
@@ -37,8 +38,8 @@ class AnalysisPipeline:
     def run(
         self,
         class_raster_path: str,
-        metrics_rasters: Dict[str, str],
-        vector_cities_path: str,
+        metrics_rasters: Optional[Dict[str, str]] = None,
+        vector_cities_path: str = None,
         city_field: str = "municipio",
         class_map: Optional[Dict[int, str]] = None,
     ) -> pd.DataFrame:
@@ -46,7 +47,7 @@ class AnalysisPipeline:
 
         Args:
             class_raster_path: Path to classification raster
-            metrics_rasters: Dictionary mapping metric names to file paths
+            metrics_rasters: Optional dictionary mapping metric names to file paths
             vector_cities_path: Path to cities shapefile
             city_field: Field name containing city names
             class_map: Optional mapping from class codes to names
@@ -55,7 +56,11 @@ class AnalysisPipeline:
             Combined DataFrame with statistics from all cities
         """
         # Validate paths
-        all_paths = [class_raster_path, *metrics_rasters.values(), vector_cities_path]
+        all_paths = [class_raster_path]
+        if metrics_rasters:
+            all_paths.extend(metrics_rasters.values())
+        if vector_cities_path:
+            all_paths.append(vector_cities_path)
         self.raster_loader.validate_paths(all_paths)
 
         # Create output directories
@@ -63,16 +68,20 @@ class AnalysisPipeline:
         stats_dir = os.path.join(self.config.outdir, "stats")
         os.makedirs(stats_dir, exist_ok=True)
 
-        metrics_order = list(metrics_rasters.keys())
+        metrics_order = list(metrics_rasters.keys()) if metrics_rasters else []
 
         # Main processing loop
         with self.raster_loader.load_classification_raster(
             class_raster_path
         ) as src_class, ExitStack() as stack:
-            # Open metric rasters
-            src_metrics = self.raster_loader.open_metric_rasters(metrics_rasters, stack)
+            # Open metric rasters if provided
+            src_metrics = {}
+            if metrics_rasters:
+                src_metrics = self.raster_loader.open_metric_rasters(metrics_rasters, stack)
 
             # Load and reproject cities
+            if not vector_cities_path:
+                raise ValueError("vector_cities_path is required")
             gdf = self.vector_loader.load_cities(
                 vector_cities_path, city_field, src_class.crs
             )
@@ -99,51 +108,61 @@ class AnalysisPipeline:
 
                 pixel_area_m2 = pixel_area_from_transform(class_transform)
 
-                # Process each metric
-                metric_stats: List[pd.DataFrame] = []
-                raw_arrays: Dict[str, np.ndarray] = {}
+                # If no metrics provided, calculate class area percentages only
+                if not metrics_rasters:
+                    # Calculate class area percentages
+                    df_city = self.aggregator.calculate_class_area_percentages(class_clip)
+                    if df_city.empty:
+                        continue
+                    # Add metadata
+                    df_city = self.aggregator.add_metadata(df_city, city, class_map)
+                else:
+                    # Process each metric
+                    metric_stats: List[pd.DataFrame] = []
+                    raw_arrays: Dict[str, np.ndarray] = {}
 
-                for metric_name, src_metric in src_metrics.items():
-                    # Clip metric raster
-                    metr = self.raster_loader.clip_metric_raster(
-                        src_metric,
-                        src_class,
-                        geom,
-                        class_transform,
-                        class_clip.shape,
-                    )
-
-                    # Aggregate statistics
-                    stats = self.aggregator.summarize_by_classes(metr, class_clip)
-
-                    if not stats.empty:
-                        stats = self.aggregator.add_total_kg(
-                            stats, metric_name, class_transform, pixel_area_m2
+                    for metric_name, src_metric in src_metrics.items():
+                        # Clip metric raster
+                        metr = self.raster_loader.clip_metric_raster(
+                            src_metric,
+                            src_class,
+                            geom,
+                            class_transform,
+                            class_clip.shape,
                         )
 
-                    metric_stats.append(stats)
-                    raw_arrays[metric_name] = metr
+                        # Aggregate statistics
+                        stats = self.aggregator.summarize_by_classes(metr, class_clip)
 
-                if not metric_stats:
-                    continue
+                        if not stats.empty:
+                            stats = self.aggregator.add_total_kg(
+                                stats, metric_name, class_transform, pixel_area_m2
+                            )
 
-                # Merge metrics
-                df_city = self.aggregator.merge_metric_stats(metric_stats)
+                        metric_stats.append(stats)
+                        raw_arrays[metric_name] = metr
 
-                if df_city.empty:
-                    continue
+                    if not metric_stats:
+                        continue
 
-                # Add metadata
-                df_city = self.aggregator.add_metadata(df_city, city, class_map)
+                    # Merge metrics
+                    df_city = self.aggregator.merge_metric_stats(metric_stats)
 
-                # Save city-specific CSV
-                city_csv = os.path.join(self.config.outdir, f"{city}_stats_por_classe.csv")
-                df_city.to_csv(city_csv, index=False)
+                    if df_city.empty:
+                        continue
+
+                    # Add metadata
+                    df_city = self.aggregator.add_metadata(df_city, city, class_map)
+
+                # Save city-specific CSV if enabled
+                if self.config.save_csv_files:
+                    city_csv = os.path.join(self.config.outdir, f"{city}_stats_por_classe.csv")
+                    df_city.to_csv(city_csv, index=False)
                 combined_rows.append(df_city)
 
-                # Run inferential tests
+                # Run inferential tests (only if metrics are provided)
                 stats_annots: Dict[str, Dict] = {}
-                if self.config.run_inferential_tests:
+                if self.config.run_inferential_tests and metrics_rasters:
                     city_stats_dir = os.path.join(stats_dir, city.replace(" ", "_"))
                     os.makedirs(city_stats_dir, exist_ok=True)
 
@@ -159,8 +178,8 @@ class AnalysisPipeline:
                         infer_rows.append(result)
                         stats_annots[metric_name] = result
 
-                # Generate plots
-                if self.config.make_plots:
+                # Generate plots (only if metrics are provided)
+                if self.config.make_plots and metrics_rasters:
                     label_col = (
                         "classe_nome" if "classe_nome" in df_city.columns else "classe"
                     )
@@ -176,6 +195,33 @@ class AnalysisPipeline:
 
             # Save combined outputs
             combined = self._save_combined_outputs(combined_rows, infer_rows)
+
+            # Generate stacked bar charts if enabled
+            if self.config.make_stacked_bar_charts and not combined.empty:
+                # Use color constants from utils.constants
+                class_colors = CLASS_COLORS.copy()
+
+                # If no metrics, generate percentage-based stacked bar chart
+                if not metrics_rasters:
+                    plotter = self.graphics.create_stacked_bar_plotter(class_colors)
+                    plotter.plot(
+                        combined,
+                        "Area",
+                        self.config.outdir,
+                        value_type="percentage",
+                        normalize=False,  # Already normalized to 0-100%
+                    )
+                    print("[OK] Stacked bar chart (percentage area) generated")
+                else:
+                    self.graphics.generate_stacked_bar_charts(
+                        combined,
+                        metrics_order,
+                        self.config.outdir,
+                        value_type=self.config.stacked_bar_value_type,
+                        normalize=self.config.stacked_bar_normalize,
+                        class_colors=class_colors,
+                    )
+                    print("[OK] Stacked bar charts generated")
 
             return combined
 
@@ -193,16 +239,17 @@ class AnalysisPipeline:
         """
         if combined_rows:
             combined = pd.concat(combined_rows, ignore_index=True)
-            combined_path = os.path.join(
-                self.config.outdir, "todas_cidades_stats_por_classe.csv"
-            )
-            combined.to_csv(combined_path, index=False)
-            print(f"[OK] Combined output: {combined_path}")
+            if self.config.save_csv_files:
+                combined_path = os.path.join(
+                    self.config.outdir, "todas_cidades_stats_por_classe.csv"
+                )
+                combined.to_csv(combined_path, index=False)
+                print(f"[OK] Combined output: {combined_path}")
         else:
             combined = pd.DataFrame()
             print("[Warning] No statistics generated.")
 
-        if self.config.run_inferential_tests and infer_rows:
+        if self.config.run_inferential_tests and infer_rows and self.config.save_csv_files:
             infer_df = pd.DataFrame(infer_rows)
             infer_path = os.path.join(
                 self.config.outdir, "stats", "resumo_inferencial_por_cidade.csv"
