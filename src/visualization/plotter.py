@@ -291,6 +291,120 @@ class ViolinPlotter(BasePlotter):
         plt.savefig(os.path.join(outdir, filename), dpi=200, bbox_inches="tight")
         plt.close()
 
+    def plot_combined_cities(
+        self,
+        city_data_list: List[Dict],
+        metric: str,
+        class_map: Optional[Dict[int, str]],
+        outdir: str,
+    ) -> None:
+        """Generate a combined violin plot with all cities in a single image.
+
+        Args:
+            city_data_list: List of dictionaries, each containing:
+                - 'values': np.ndarray of metric values
+                - 'classes': np.ndarray of classification codes
+                - 'city': str city name
+                - 'annotation': Optional dict with statistical test results
+            metric: Name of the metric
+            class_map: Optional mapping from class codes to names
+            outdir: Output directory
+        """
+        if not city_data_list:
+            print("[Warning] No city data provided for combined plot. Skipping.")
+            return
+
+        # Determine grid layout
+        n_cities = len(city_data_list)
+        n_cols = min(3, n_cities)  # Max 3 columns
+        n_rows = (n_cities + n_cols - 1) // n_cols  # Ceiling division
+
+        # Create figure with subplots
+        fig, axes = plt.subplots(
+            n_rows, n_cols, figsize=(6 * n_cols, 5 * n_rows), sharey=True
+        )
+        
+        # Handle single subplot case
+        if n_cities == 1:
+            axes = [axes]
+        elif n_rows == 1:
+            axes = axes if isinstance(axes, np.ndarray) else [axes]
+        else:
+            axes = axes.flatten()
+
+        # Get all class labels from first city (assumes consistent class sets)
+        first_data = self._prepare_data_for_plotting(
+            city_data_list[0]["values"], city_data_list[0]["classes"], class_map
+        )
+        all_labels = first_data[1]
+
+        # Plot each city
+        for idx, city_data in enumerate(city_data_list):
+            ax = axes[idx]
+            city = city_data["city"]
+            values = city_data["values"]
+            classes = city_data["classes"]
+            annotation = city_data.get("annotation")
+
+            # Prepare data for this city
+            data_by_class, labels = self._prepare_data_for_plotting(
+                values, classes, class_map
+            )
+
+            if not data_by_class:
+                ax.text(0.5, 0.5, f"No data for {city}", 
+                       ha="center", va="center", transform=ax.transAxes)
+                ax.set_title(city, fontsize=12, fontweight="bold")
+                ax.set_xticks([])
+                ax.set_yticks([])
+                continue
+
+            # Create violin plot
+            positions = np.arange(len(labels))
+            parts = ax.violinplot(
+                [data_by_class[label] for label in labels],
+                positions=positions,
+                showmeans=True,
+                showmedians=True,
+                widths=0.7,
+            )
+
+            # Style violin plot
+            self._style_violin_plot(parts, labels, class_map)
+
+            # Configure axes
+            ax.set_xticks(positions)
+            ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=9)
+            if idx % n_cols == 0:  # Leftmost column
+                ax.set_ylabel(f"{metric}", fontsize=11, fontweight="bold")
+            ax.set_title(city, fontsize=12, fontweight="bold", pad=10)
+            ax.grid(axis="y", alpha=0.3, linestyle="--")
+            ax.set_axisbelow(True)
+
+            # Add statistical annotation
+            if annotation is not None:
+                self._add_statistical_annotation(ax, annotation)
+
+        # Hide extra subplots if any
+        for idx in range(n_cities, len(axes)):
+            axes[idx].set_visible(False)
+
+        # Add overall title
+        fig.suptitle(
+            f"{metric} Distribution by Land Use Class - All Cities",
+            fontsize=16,
+            fontweight="bold",
+            y=0.995,
+        )
+
+        # Adjust layout and save
+        plt.tight_layout(rect=[0, 0, 1, 0.99])  # Leave space for suptitle
+        os.makedirs(outdir, exist_ok=True)
+        filename = f"all_cities_{metric}_violin_combined.png"
+        plt.savefig(os.path.join(outdir, filename), dpi=200, bbox_inches="tight")
+        plt.close()
+        print(f"[OK] Combined violin plot generated: {filename}")
+
     def _prepare_data_for_plotting(
         self,
         values: np.ndarray,

@@ -284,6 +284,9 @@ class AnalysisPipeline:
         # Create output directory
         os.makedirs(self.config.outdir, exist_ok=True)
 
+        # Collect all city data for combined plot
+        city_data_list = []
+
         # Main processing loop
         with self.raster_loader.load_classification_raster(
             class_raster_path
@@ -293,7 +296,7 @@ class AnalysisPipeline:
                 vector_cities_path, city_field, src_class.crs
             )
 
-            # Process each city
+            # Process each city and collect data
             for _, row in gdf.iterrows():
                 city = str(row[city_field]).strip()
 
@@ -324,22 +327,28 @@ class AnalysisPipeline:
                     biomass_clip, class_clip, class_map
                 )
 
-                # Generate violin plot
+                # Collect data for combined plot
+                city_data_list.append({
+                    "city": city,
+                    "values": biomass_clip,
+                    "classes": class_clip,
+                    "annotation": test_results,
+                })
+
+                print(f"[OK] Processed data for {city}")
+
+            # Generate combined violin plot with all cities
+            if city_data_list:
                 plotter = self.graphics.create_plotter("violin")
-                # ViolinPlotter uses plot_with_raw_data for raw array visualization
                 violin_plotter = plotter.plotter
                 if isinstance(violin_plotter, ViolinPlotter):
-                    violin_plotter.plot_with_raw_data(
-                        biomass_clip,
-                        class_clip,
+                    violin_plotter.plot_combined_cities(
+                        city_data_list,
                         "Biomass",
-                        city,
                         class_map,
                         self.config.outdir,
-                        annotation=test_results,
                     )
-                    print(f"[OK] Violin plot generated for {city}")
                 else:
                     print(f"[Warning] Expected ViolinPlotter, got {type(violin_plotter).__name__}")
-
-            print("[OK] All violin plots generated")
+            else:
+                print("[Warning] No valid city data collected. No plots generated.")
