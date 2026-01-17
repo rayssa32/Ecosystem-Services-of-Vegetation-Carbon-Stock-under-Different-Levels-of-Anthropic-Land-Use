@@ -2,13 +2,14 @@
 
 import os
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Tuple
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 from ..config import AnalysisConfig
+from ..utils.constants import CLASS_COLORS, DEFAULT_CLASS_COLORS
 
 
 class BasePlotter(ABC):
@@ -209,6 +210,296 @@ class ViolinPlotter(BasePlotter):
         pass
 
 
+class StackedBarPlotter:
+    """Generates stacked bar charts comparing classes across cities.
+    
+    NOTE: This plotter intentionally has a different interface than BasePlotter
+    because it operates on combined data from multiple cities, whereas
+    BasePlotter implementations work on single-city data. This architectural
+    separation is intentional for clarity and reflects different use cases.
+    """
+
+    def __init__(self, config: AnalysisConfig, class_colors: Optional[Dict[int, str]] = None):
+        """Initialize stacked bar plotter.
+
+        Args:
+            config: Analysis configuration object
+            class_colors: Optional dictionary mapping class codes to hex colors.
+                         If not provided, uses CLASS_COLORS constant.
+        """
+        self.config = config
+        self.class_colors = class_colors or CLASS_COLORS.copy()
+
+    def plot(
+        self,
+        combined_df: pd.DataFrame,
+        metric: str,
+        outdir: str,
+        value_type: str = "mean",
+        normalize: bool = False,
+    ) -> None:
+        """Generate stacked bar chart with cities on X-axis and classes stacked on Y-axis.
+
+        Args:
+            combined_df: Combined DataFrame with statistics from all cities
+            metric: Name of the metric to plot
+            outdir: Output directory
+            value_type: Type of value to plot ("mean", "sum", "count", "total_kg", "percentage")
+            normalize: If True, normalize to percentages (0-100), otherwise use absolute values
+        """
+        # Validate input
+        if not self._validate_input(combined_df, metric, value_type):
+            return
+
+        # Prepare data
+        value_col, label_col = self._determine_columns(combined_df, metric, value_type)
+        pivot_df = self._prepare_pivot_data(combined_df, value_col, label_col, normalize)
+
+        # Get colors for classes
+        colors = self._get_class_colors(pivot_df.columns, combined_df, label_col)
+
+        # Create and configure plot
+        fig, ax = self._create_plot(pivot_df, colors)
+        self._configure_plot_axes(ax, metric, value_type, normalize)
+        self._add_legend(ax)
+
+        # Save plot
+        self._save_plot(fig, outdir, metric, value_type, normalize)
+
+    def _validate_input(
+        self, combined_df: pd.DataFrame, metric: str, value_type: str
+    ) -> bool:
+        """Validate input DataFrame and columns.
+
+        Args:
+            combined_df: DataFrame to validate
+            metric: Metric name
+            value_type: Value type
+
+        Returns:
+            True if valid, False otherwise
+        """
+        if "cidade" not in combined_df.columns:
+            print("[Warning] 'cidade' column not found. Cannot generate stacked bar chart.")
+            return False
+        return True
+
+    def _determine_columns(
+        self, combined_df: pd.DataFrame, metric: str, value_type: str
+    ) -> Tuple[str, str]:
+        """Determine value and label columns from DataFrame.
+
+        Args:
+            combined_df: Combined DataFrame
+            metric: Metric name
+            value_type: Value type
+
+        Returns:
+            Tuple of (value_column, label_column)
+
+        Raises:
+            ValueError: If required column not found
+        """
+        # Determine value column
+        if value_type == "percentage":
+            value_col = "percentage"
+        elif value_type == "total_kg":
+            value_col = f"{metric}_total_kg"
+        else:
+            value_col = f"{metric}_{value_type}"
+
+        if value_col not in combined_df.columns:
+            available = list(combined_df.columns)
+            print(
+                f"[Warning] Column '{value_col}' not found. "
+                f"Available columns: {available}"
+            )
+            raise ValueError(f"Column '{value_col}' not found in DataFrame")
+
+        # Determine label column
+        label_col = (
+            "classe_nome" if "classe_nome" in combined_df.columns else "classe"
+        )
+
+        return value_col, label_col
+
+    def _prepare_pivot_data(
+        self,
+        combined_df: pd.DataFrame,
+        value_col: str,
+        label_col: str,
+        normalize: bool,
+    ) -> pd.DataFrame:
+        """Prepare pivoted data for plotting.
+
+        Args:
+            combined_df: Combined DataFrame with statistics from all cities
+            value_col: Column name for values
+            label_col: Column name for class labels
+            normalize: Whether to normalize to percentages
+
+        Returns:
+            Pivoted DataFrame with cities as index and classes as columns
+        """
+        # Pivot data: cities as index, classes as columns
+        pivot_df = combined_df.pivot_table(
+            index="cidade",
+            columns=label_col,
+            values=value_col,
+            aggfunc="sum",
+            fill_value=0,
+        )
+
+        # Sort cities alphabetically
+        pivot_df = pivot_df.sort_index()
+
+        # Normalize if requested (convert to percentages)
+        if normalize:
+            pivot_df = pivot_df.div(pivot_df.sum(axis=1), axis=0) * 100
+
+        return pivot_df
+
+    def _get_class_colors(
+        self,
+        class_order: List[str],
+        combined_df: pd.DataFrame,
+        label_col: str,
+    ) -> List[str]:
+        """Get colors for each class in the specified order.
+
+        Args:
+            class_order: Ordered list of class labels
+            combined_df: Original DataFrame to lookup class codes
+            label_col: Column name for class labels
+
+        Returns:
+            List of hex color codes in same order as class_order
+        """
+        colors = []
+
+        for i, cls in enumerate(class_order):
+            # Try to get class code from the original DataFrame
+            class_code = None
+            if "classe" in combined_df.columns:
+                mask = combined_df[label_col] == cls
+                if mask.any():
+                    sample = combined_df[mask]["classe"].iloc[0]
+                    if pd.notna(sample):
+                        class_code = int(sample)
+
+            # Use color from mapping if available, otherwise use default
+            if class_code is not None and class_code in self.class_colors:
+                colors.append(self.class_colors[class_code])
+            else:
+                colors.append(DEFAULT_CLASS_COLORS[i % len(DEFAULT_CLASS_COLORS)])
+
+        return colors
+
+    def _create_plot(self, pivot_df: pd.DataFrame, colors: List[str]) -> Tuple:
+        """Create the matplotlib figure and axes with stacked bar chart.
+
+        Args:
+            pivot_df: Pivoted DataFrame with cities and classes
+            colors: List of colors for each class
+
+        Returns:
+            Tuple of (figure, axes)
+        """
+        fig, ax = plt.subplots(figsize=(14, 8))
+
+        # Create stacked bar chart
+        pivot_df.plot(
+            kind="bar",
+            stacked=True,
+            ax=ax,
+            color=colors,
+            width=0.8,
+            edgecolor="white",
+            linewidth=0.5,
+        )
+
+        return fig, ax
+
+    def _configure_plot_axes(
+        self, ax: plt.Axes, metric: str, value_type: str, normalize: bool
+    ) -> None:
+        """Configure plot axes, labels, and title.
+
+        Args:
+            ax: Matplotlib axes object
+            metric: Metric name
+            value_type: Value type
+            normalize: Whether values are normalized
+        """
+        # Set y-axis label
+        if value_type == "percentage":
+            ylabel = "Area Coverage (%)"
+        else:
+            ylabel = f"{metric} ({value_type})"
+            if normalize:
+                ylabel = f"{metric} ({value_type}) - Percentage (%)"
+
+        ax.set_xlabel("City", fontsize=12, fontweight="bold")
+        ax.set_ylabel(ylabel, fontsize=12, fontweight="bold")
+
+        # Set title
+        if value_type == "percentage":
+            title = "Stacked Bar Chart: Land Use Class Coverage (%) by City"
+        else:
+            title = f"Stacked Bar Chart: {metric} by City and Land Use Class"
+
+        ax.set_title(title, fontsize=14, fontweight="bold", pad=20)
+
+        # Rotate x-axis labels
+        plt.xticks(rotation=45, ha="right")
+
+        # Add grid
+        ax.grid(axis="y", alpha=0.3, linestyle="--")
+        ax.set_axisbelow(True)
+
+    def _add_legend(self, ax: plt.Axes) -> None:
+        """Add legend to the plot.
+
+        Args:
+            ax: Matplotlib axes object
+        """
+        ax.legend(
+            title="Land Use Class",
+            bbox_to_anchor=(1.05, 1),
+            loc="upper left",
+            frameon=True,
+            fancybox=True,
+            shadow=True,
+        )
+
+    def _save_plot(
+        self, fig: plt.Figure, outdir: str, metric: str, value_type: str, normalize: bool
+    ) -> None:
+        """Save the plot to file.
+
+        Args:
+            fig: Matplotlib figure object
+            outdir: Output directory
+            metric: Metric name for filename
+            value_type: Value type for filename
+            normalize: Whether values are normalized (for filename)
+        """
+        os.makedirs(outdir, exist_ok=True)
+
+        # Determine filename
+        if value_type == "percentage":
+            filename = "stacked_bar_land_use_percentage.png"
+        else:
+            filename = f"stacked_bar_{metric}_{value_type}"
+            if normalize:
+                filename += "_normalized"
+            filename += ".png"
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(outdir, filename), dpi=200, bbox_inches="tight")
+        plt.close()
+
+
 class Plotter:
     """Main plotting interface that delegates to specific plotter types."""
 
@@ -240,6 +531,11 @@ class Plotter:
             return BoxPlotter()
         elif plot_type == "violin":
             return ViolinPlotter()
+        elif plot_type == "stacked_bar":
+            # StackedBarPlotter uses a different interface, handled separately
+            raise ValueError(
+                "StackedBarPlotter must be created directly via GraphicsFactory.create_stacked_bar_plotter()"
+            )
         else:
             raise ValueError(f"Unsupported plot type: {plot_type}")
 
