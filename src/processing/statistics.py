@@ -250,3 +250,44 @@ class StatisticsAnalyzer:
             "p_global": p_global,
             "efeito": efeito,
         }
+
+    def run_kruskal_wallis_test(
+        self,
+        metric_clip: np.ndarray,
+        class_clip: np.ndarray,
+        class_map: Optional[Dict[int, str]],
+    ) -> Dict[str, object]:
+        """Run Kruskal-Wallis test and calculate epsilon-squared effect size.
+
+        Excludes classes specified in config.exclude_classes from the test.
+
+        Args:
+            metric_clip: Clipped metric array
+            class_clip: Clipped classification array
+            class_map: Optional mapping from class codes to names
+
+        Returns:
+            Dictionary with test results (teste_global, p_global, efeito)
+        """
+        # sample_per_class already respects config.exclude_classes
+        samples = self.sample_per_class(metric_clip, class_clip)
+
+        if len(samples) < 2:
+            return {
+                "teste_global": "Kruskal–Wallis",
+                "p_global": np.nan,
+                "efeito": np.nan,
+            }
+
+        codes = sorted(samples.keys())
+        groups = [samples[c] for c in codes]
+
+        # Run Kruskal-Wallis test
+        p_global = kruskal(*groups).pvalue
+        efeito = self.effect_size_kruskal(groups)
+
+        return {
+            "teste_global": "Kruskal–Wallis",
+            "p_global": p_global,
+            "efeito": efeito,
+        }
