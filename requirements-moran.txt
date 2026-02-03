@@ -1,0 +1,21 @@
+# Dependências para Moran's I (run_moran.py)
+#
+# Em sistemas com PEP 668 (Fedora/Arch/etc.), use um ambiente virtual:
+#
+#   python -m venv .venv
+#   source .venv/bin/activate   # Linux/macOS
+#   pip install -r requirements-moran.txt
+#   python run_moran.py
+#
+# Ou, sem ativar o venv:
+#   .venv/bin/pip install -r requirements-moran.txt
+#   .venv/bin/python run_moran.py
+#
+# Dependências do script (raster + Moran + carregamento do pacote src):
+rasterio
+libpysal>=4.9
+esda>=2.5
+statsmodels
+scikit-posthocs
+affine
+matplotlib
