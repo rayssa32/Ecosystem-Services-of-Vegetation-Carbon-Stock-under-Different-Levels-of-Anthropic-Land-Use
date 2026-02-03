@@ -8,7 +8,7 @@ import os
 from typing import List, Optional
 
 from src import AnalysisConfig, AnalysisPipeline, run_moran_analysis
-from src.config import PathsConfig, MoranConfig
+from src.config import PathsConfig, MoranConfig, SankeyConfig
 
 
 # =============================================================================
@@ -29,12 +29,18 @@ CITIES_FILTER: Optional[List[str]] = None
 # Exemplos: None  |  ["Lavras"]  |  ["Lavras", "Varginha", "Alfenas"]
 
 # ---- O que rodar ----
-RUN_VIOLIN = True   # Gráfico de violino (biomassa por classe de uso, cidades combinadas)
-RUN_MORAN = True    # Moran's I + scatter por cidade (resolução nativa da biomassa)
+RUN_VIOLIN = False  # Gráfico de violino (biomassa por classe de uso, cidades combinadas)
+RUN_SANKEY = True   # Sankey: uso do solo → classe de biomassa (quantis); um por cidade ou geral
+RUN_MORAN = False   # Moran's I + scatter por cidade (resolução nativa da biomassa)
 
 # ---- Opções do gráfico de violino ----
 PLOT_TYPES = ["violin"]   # Opções: "violin" | "bar" | "box"
 EXCLUDE_CLASSES_VIOLIN = [0]   # Ex.: [0] = Água
+
+# ---- Opções do Sankey (se RUN_SANKEY = True) ----
+SANKEY_PER_CITY = True   # True = um Sankey por cidade; False = um Sankey geral (todas as cidades)
+SANKEY_N_QUANTILES = 3   # Classes de biomassa por quantis (ex.: 3 = Low, Medium, High)
+SANKEY_USE_PERCENT = True   # True = espessura = % de pixels; False = nº de pixels
 
 # ---- Opções do Moran (se RUN_MORAN = True) ----
 MORAN_NATIVE_RESOLUTION = True   # True = resolução nativa; False = reamostrado 10 m
@@ -104,6 +110,40 @@ def main() -> None:
             cities_filter=CITIES_FILTER,
         )
         print("[OK] Violino concluído.")
+
+    if RUN_SANKEY:
+        if not _validate_paths(paths, need_class=True):
+            return
+        sankey_cfg = SankeyConfig(
+            per_city=SANKEY_PER_CITY,
+            n_quantiles=SANKEY_N_QUANTILES,
+            use_percentage=SANKEY_USE_PERCENT,
+        )
+        config = AnalysisConfig(
+            resample_metrics="nearest",
+            make_plots=True,
+            outdir=paths.outdir,
+            plot_types=PLOT_TYPES,
+            make_stacked_bar_charts=False,
+            save_csv_files=False,
+            run_inferential_tests=False,
+            exclude_classes=EXCLUDE_CLASSES_VIOLIN,
+            sample_per_class=5000,
+            min_n_for_tests=10,
+            alpha=0.05,
+            rng_seed=42,
+        )
+        pipeline = AnalysisPipeline(config)
+        pipeline.run_sankey_analysis(
+            class_raster_path=paths.class_raster_path,
+            biomass_raster_path=paths.biomass_raster_path,
+            vector_cities_path=paths.vector_cities_path,
+            city_field=paths.city_field,
+            class_map=CLASS_MAP,
+            cities_filter=CITIES_FILTER,
+            sankey_config=sankey_cfg,
+        )
+        print("[OK] Sankey concluído.")
 
     if RUN_MORAN:
         if not _validate_paths(paths, need_class=not MORAN_NATIVE_RESOLUTION):

@@ -16,14 +16,17 @@ project/
 │   ├── processing/              # Business logic layer
 │   │   ├── __init__.py
 │   │   ├── aggregator.py        # Data aggregation by classes
-│   │   └── statistics.py        # Statistical analysis and tests
+│   │   ├── statistics.py        # Statistical analysis and tests
+│   │   ├── moran.py             # Moran's I
+│   │   └── biomass_classes.py  # Biomass quantile classification (Sankey)
 │   ├── visualization/           # Graphics generation layer
 │   │   ├── __init__.py
 │   │   ├── plotter.py           # Plotting base classes and implementations
-│   │   └── graphics_factory.py  # Factory for creating different plot types
+│   │   ├── graphics_factory.py  # Factory for creating different plot types
+│   │   └── sankey_plotter.py    # Sankey: land use → biomass class
 │   ├── pipeline/                # Orchestration layer
 │   │   ├── __init__.py
-│   │   ├── analysis_pipeline.py # Main pipeline (violin, bar, box, stacked bar)
+│   │   ├── analysis_pipeline.py # Main pipeline (violin, bar, box, stacked bar, Sankey)
 │   │   └── moran_pipeline.py    # Moran's I per city
 │   ├── run_moran.py             # Moran's I (python -m src.run_moran)
 │   ├── reproject_raster.py      # Reproject rasters (python -m src.reproject_raster)
@@ -60,6 +63,7 @@ Clear boundaries between layers with well-defined interfaces and minimal couplin
 ### Configuration (`src/config.py`)
 - `PathsConfig`: Common paths (rasters, shapefile, outdir)
 - `MoranConfig`: Moran's I options (native resolution, permutations, etc.)
+- `SankeyConfig`: Sankey options (per_city, n_quantiles, use_percentage)
 - `AnalysisConfig`: Pipeline parameters (plot_types, bar, violin, stacked bar)
 - Single source of truth for settings
 
@@ -71,6 +75,7 @@ Clear boundaries between layers with well-defined interfaces and minimal couplin
 ### Processing Layer (`src/processing/`)
 - **DataAggregator**: Aggregates statistics by land use classes
 - **StatisticsAnalyzer**: Performs inferential tests (ANOVA, Kruskal-Wallis)
+- **biomass_classes**: Quantile-based biomass classification (Low/Medium/High) for Sankey
 - Business logic separated from I/O
 
 ### Visualization Layer (`src/visualization/`)
@@ -80,9 +85,11 @@ Clear boundaries between layers with well-defined interfaces and minimal couplin
 - **ViolinPlotter**: Violin plots (placeholder for future implementation)
 - **Plotter**: Delegates to specific plotter implementations
 - **GraphicsFactory**: Factory for creating and managing plotters
+- **sankey_plotter**: Land use → biomass class Sankey (plotly); flow thickness = count or % of pixels
 
 ### Pipeline (`src/pipeline/`)
-- **AnalysisPipeline**: Orchestrates analysis (violin, bar, box, stacked bar)
+- **AnalysisPipeline**: Orchestrates analysis (violin, bar, box, stacked bar, Sankey). Order: violin → Sankey → Moran.
+- **run_sankey_analysis()**: Reads rasters, resamples MODIS→Sentinel, builds pixel-level flows, one Sankey per city or one combined
 - **run_moran_analysis()**: Moran's I per city, scatter plots and CSV (native or 10 m resolution)
 
 ## Adding New Plot Types

@@ -9,13 +9,15 @@ import pandas as pd
 import rasterio
 from shapely.geometry import mapping
 
-from ..config import AnalysisConfig
+from ..config import AnalysisConfig, SankeyConfig
 from ..data.raster_loader import RasterLoader
 from ..data.vector_loader import VectorLoader
 from ..processing.aggregator import DataAggregator
+from ..processing.biomass_classes import classify_by_quantiles, default_biomass_labels
 from ..processing.statistics import StatisticsAnalyzer
 from ..visualization.graphics_factory import GraphicsFactory
 from ..visualization.plotter import ViolinPlotter
+from ..visualization.sankey_plotter import build_flow_df, plot_sankey
 from ..utils.raster_utils import pixel_area_from_transform
 from ..utils.constants import CLASS_COLORS
 
@@ -355,3 +357,116 @@ class AnalysisPipeline:
                     print(f"[Warning] Expected ViolinPlotter, got {type(violin_plotter).__name__}")
             else:
                 print("[Warning] No valid city data collected. No plots generated.")
+
+    def run_sankey_analysis(
+        self,
+        class_raster_path: str,
+        biomass_raster_path: str,
+        vector_cities_path: str,
+        city_field: str,
+        class_map: Dict[int, str],
+        cities_filter: Optional[List[str]] = None,
+        sankey_config: Optional[SankeyConfig] = None,
+    ) -> None:
+        """Run Sankey diagram: land use → biomass class (quantile-based). Order: after violin/Kruskal.
+
+        Uses same data as violin: read rasters, resample MODIS→Sentinel, pixel-level,
+        then build flows (land use → biomass class) with thickness = count or % of pixels.
+        """
+        if sankey_config is None:
+            sankey_config = SankeyConfig()
+
+        all_paths = [class_raster_path, biomass_raster_path, vector_cities_path]
+        self.raster_loader.validate_paths(all_paths)
+        sankey_dir = os.path.join(self.config.outdir, "sankey")
+        os.makedirs(sankey_dir, exist_ok=True)
+
+        n_q = sankey_config.n_quantiles
+        biomass_labels = default_biomass_labels(n_q)
+
+        # Collect per-city data and pool biomass for global quantile edges
+        city_data_list: List[tuple] = []
+        all_biomass: List[np.ndarray] = []
+
+        with self.raster_loader.load_classification_raster(
+            class_raster_path
+        ) as src_class, rasterio.open(biomass_raster_path) as src_biomass:
+            gdf = self.vector_loader.load_cities(
+                vector_cities_path, city_field, src_class.crs
+            )
+            for _, row in gdf.iterrows():
+                city = str(row[city_field]).strip()
+                if cities_filter is not None and city not in cities_filter:
+                    continue
+                if row.geometry is None or row.geometry.is_empty:
+                    continue
+                geom = [mapping(row.geometry)]
+                try:
+                    class_clip, class_transform = self.raster_loader.clip_classification(
+                        src_class, geom
+                    )
+                except ValueError:
+                    continue
+                biomass_clip = self.raster_loader.clip_metric_raster(
+                    src_biomass,
+                    src_class,
+                    geom,
+                    class_transform,
+                    class_clip.shape,
+                )
+                valid = ~(np.isnan(class_clip) | np.isnan(biomass_clip))
+                if not np.any(valid):
+                    continue
+                city_data_list.append((city, class_clip, biomass_clip))
+                all_biomass.append(biomass_clip)
+
+        if not city_data_list:
+            print("[Warning] No valid city data for Sankey. Skipping.")
+            return
+
+        # Global quantile edges (pooled biomass); use plain ndarray to avoid numpy partition/mask warnings
+        pooled = np.concatenate([np.asarray(b, dtype=np.float64).ravel() for b in all_biomass])
+        if np.ma.isMaskedArray(pooled):
+            pooled = np.ma.filled(pooled, np.nan)
+        pooled = pooled[~np.isnan(pooled)]
+        if pooled.size == 0:
+            print("[Warning] No valid biomass for Sankey. Skipping.")
+            return
+        pooled = np.asarray(pooled, dtype=np.float64)
+        edges = np.nanquantile(
+            pooled,
+            np.linspace(0, 1, n_q + 1)[1:-1],
+        )
+
+        def _make_flow_and_plot(city_label: str, class_arr: np.ndarray, biomass_arr: np.ndarray, base_name: str) -> None:
+            biomass_class, _ = classify_by_quantiles(biomass_arr, n_quantiles=n_q, edges=edges)
+            lu_flat = class_arr.ravel()
+            bc_flat = biomass_class.ravel()
+            flow_df = build_flow_df(
+                lu_flat,
+                bc_flat,
+                class_map,
+                biomass_labels,
+                use_percentage=sankey_config.use_percentage,
+            )
+            if flow_df.empty:
+                return
+            value_label = "% pixels" if sankey_config.use_percentage else "pixels"
+            outpath = os.path.join(sankey_dir, base_name)
+            plot_sankey(
+                flow_df,
+                outpath,
+                title=f"Land use → Biomass class{f' — {city_label}' if city_label else ''}",
+                value_label=value_label,
+            )
+            print(f"[OK] Sankey saved: {outpath}.html")
+
+        if sankey_config.per_city:
+            for city, class_clip, biomass_clip in city_data_list:
+                safe_name = "".join(c if c.isalnum() or c in " -_" else "_" for c in city)
+                _make_flow_and_plot(city, class_clip, biomass_clip, f"sankey_{safe_name}")
+        else:
+            # One combined Sankey (all cities)
+            class_all = np.concatenate([c.ravel() for _, c, _ in city_data_list])
+            biomass_all = np.concatenate([b.ravel() for _, _, b in city_data_list])
+            _make_flow_and_plot("", class_all, biomass_all, "sankey_all_cities")

@@ -5,8 +5,10 @@ from .config import (
     DEFAULT_CONFIG,
     PathsConfig,
     MoranConfig,
+    SankeyConfig,
     DEFAULT_PATHS,
     DEFAULT_MORAN_CONFIG,
+    DEFAULT_SANKEY_CONFIG,
 )
 from .pipeline import AnalysisPipeline, run_moran_analysis
 
@@ -15,8 +17,10 @@ __all__ = [
     "DEFAULT_CONFIG",
     "PathsConfig",
     "MoranConfig",
+    "SankeyConfig",
     "DEFAULT_PATHS",
     "DEFAULT_MORAN_CONFIG",
+    "DEFAULT_SANKEY_CONFIG",
     "AnalysisPipeline",
     "run_moran_analysis",
 ]
