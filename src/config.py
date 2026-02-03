@@ -1,7 +1,29 @@
 """Configuration settings for the analysis pipeline."""
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
+
+
+@dataclass
+class PathsConfig:
+    """Paths comuns a main.py e run_moran.py."""
+
+    class_raster_path: str = "classificacao/LULC_7_cidades_2025-07-10_2025-07-30_projected.tif"
+    biomass_raster_path: str = "metricas/Biomass_sete_cidades_projected.tif"
+    vector_cities_path: str = "shapefile/sete_cidades.shp"
+    city_field: str = "NM_MUN"
+    outdir: str = "./dados_gerados"
+
+
+@dataclass
+class MoranConfig:
+    """Configuração do Moran's I (run_moran.py)."""
+
+    use_native_resolution: bool = True
+    cities_filter: Optional[List[str]] = None  # None = todas
+    permutations: int = 999
+    contiguity: str = "rook"  # rook | queen
+    save_scatter_plots: bool = True
 
 
 @dataclass
@@ -36,5 +58,6 @@ class AnalysisConfig:
             self.plot_types = ["bar"]
 
 
-# Global default configuration instance
 DEFAULT_CONFIG = AnalysisConfig()
+DEFAULT_PATHS = PathsConfig()
+DEFAULT_MORAN_CONFIG = MoranConfig()

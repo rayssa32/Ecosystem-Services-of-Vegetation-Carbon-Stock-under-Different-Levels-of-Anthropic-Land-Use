@@ -153,7 +153,7 @@ The applied tests are **statistically appropriate** for comparing metrics betwee
 
 
 
-## 10. Outputs generated
+## 11. Outputs generated (pipeline principal)
    - `./dados_gerados/<City>_stats_por_classe.csv`  
    - `./dados_gerados/todas_cidades_stats_por_classe.csv`  
    - `./dados_gerados/stats/resumo_inferencial_por_cidade.csv`  
@@ -209,7 +209,21 @@ pip install --user numpy pandas rasterio geopandas shapely affine scipy statsmod
 
 ## How to Run
 
-1. **Adjust the paths at the beginning of the `main.py`:**
+**Estrutura:** Apenas `main.py` fica na raiz do projeto. Todo o resto está em `src/`.  
+Configure arquivos, cidades e tipos de gráfico na seção CONFIGURAÇÃO no topo de `main.py`, depois execute:
+
+```bash
+python main.py
+```
+
+Para rodar só Moran's I ou só reprojetar rasters (a partir da raiz do projeto):
+
+```bash
+python -m src.run_moran
+python -m src.reproject_raster
+```
+
+1. **Adjust the paths in the CONFIGURATION section at the top of `main.py`:**
 
    ```python
    class_raster_path = "classificacao/no_clouds2.tif"
