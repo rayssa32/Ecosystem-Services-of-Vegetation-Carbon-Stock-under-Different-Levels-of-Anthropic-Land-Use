@@ -24,13 +24,13 @@ project/
 │   ├── pipeline/                # Orchestration layer
 │   │   ├── __init__.py
 │   │   ├── analysis_pipeline.py # Main pipeline (violin, bar, box, stacked bar)
-│   │   └── moran_pipeline.py    # Moran's I por cidade
+│   │   └── moran_pipeline.py    # Moran's I per city
 │   ├── run_moran.py             # Moran's I (python -m src.run_moran)
-│   ├── reproject_raster.py      # Reprojetar rasters (python -m src.reproject_raster)
+│   ├── reproject_raster.py      # Reproject rasters (python -m src.reproject_raster)
 │   └── utils/                   # Utility functions
 │       ├── __init__.py
 │       └── raster_utils.py      # Raster utility functions
-├── main.py                      # Único entry point na raiz: configure e rode python main.py
+├── main.py                      # Single entry point at root: configure and run python main.py
 └── ...                          # Data files and outputs
 ```
 
@@ -58,9 +58,9 @@ Clear boundaries between layers with well-defined interfaces and minimal couplin
 ## Key Components
 
 ### Configuration (`src/config.py`)
-- `PathsConfig`: Paths comuns (rasters, shapefile, outdir)
-- `MoranConfig`: Opções do Moran's I (resolução nativa, permutações, etc.)
-- `AnalysisConfig`: Parâmetros do pipeline (plot_types, bar, violin, stacked bar)
+- `PathsConfig`: Common paths (rasters, shapefile, outdir)
+- `MoranConfig`: Moran's I options (native resolution, permutations, etc.)
+- `AnalysisConfig`: Pipeline parameters (plot_types, bar, violin, stacked bar)
 - Single source of truth for settings
 
 ### Data Layer (`src/data/`)
@@ -83,7 +83,7 @@ Clear boundaries between layers with well-defined interfaces and minimal couplin
 
 ### Pipeline (`src/pipeline/`)
 - **AnalysisPipeline**: Orchestrates analysis (violin, bar, box, stacked bar)
-- **run_moran_analysis()**: Moran's I por cidade, scatter plots e CSV (resolução nativa ou 10 m)
+- **run_moran_analysis()**: Moran's I per city, scatter plots and CSV (native or 10 m resolution)
 
 ## Adding New Plot Types
 
@@ -131,7 +131,7 @@ results = pipeline.run(
     metrics_rasters={"GPP": "path/to/gpp.tif", ...},
     vector_cities_path="path/to/cities.shp",
     city_field="NM_MUN",
-    class_map={1: "Vegetação", 2: "Urbano", ...}
+    class_map={1: "Vegetation", 2: "Urban", ...}
 )
 ```
 
