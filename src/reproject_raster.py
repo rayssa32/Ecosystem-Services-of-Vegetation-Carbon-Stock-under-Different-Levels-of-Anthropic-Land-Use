@@ -1,12 +1,7 @@
 """
-Utility script to reproject rasters from geographic (lat/lon) to projected CRS.
+Reprojetar rasters de coordenadas geográficas para CRS projetado.
 
-This script can reproject both classification and metric rasters to a projected
-coordinate system (EPSG:32728) that the analysis pipeline requires.
-
-Usage:
-    python reproject_raster.py
-    # Or edit the input/output paths in the script
+Uso: python -m src.reproject_raster
 """
 
 import rasterio
@@ -25,8 +20,8 @@ def reproject_raster(
         input_path: Path to input raster file
         output_path: Path for output reprojected raster
         target_crs: Target CRS (default: EPSG:32728 - UTM zone 28S)
-        resampling_method: Resampling method (default: nearest for categorical, 
-                          use bilinear/cubic for continuous data)
+        resampling_method: Resampling method (nearest for categorical,
+                          bilinear/cubic for continuous data)
     """
     with rasterio.open(input_path) as src:
         print(f"Input CRS: {src.crs}")
@@ -34,12 +29,10 @@ def reproject_raster(
         print(f"Input dimensions: {src.width} x {src.height}")
         print(f"Input pixel size: {abs(src.transform.a)}m x {abs(src.transform.e)}m (if projected)")
 
-        # Calculate transform for the reprojected raster
         transform, width, height = calculate_default_transform(
             src.crs, target_crs, src.width, src.height, *src.bounds
         )
 
-        # Update metadata for output
         kwargs = src.meta.copy()
         kwargs.update(
             {
@@ -54,7 +47,6 @@ def reproject_raster(
         print(f"Output dimensions: {width} x {height}")
         print(f"Output pixel size: {abs(transform.a)}m x {abs(transform.e)}m")
 
-        # Reproject and save
         with rasterio.open(output_path, "w", **kwargs) as dst:
             for i in range(1, src.count + 1):
                 reproject(
@@ -71,27 +63,15 @@ def reproject_raster(
 
 
 if __name__ == "__main__":
-    # Configuration for biomass raster reprojection
-    # Change these paths as needed
-    
-    # Reproject biomass raster from EPSG:4326 to EPSG:32728
     biomass_input = "metricas/Biomass_sete_cidades.tif"
     biomass_output = "metricas/Biomass_sete_cidades_projected.tif"
-    
-    # Using WGS 84 / UTM zone 28S (EPSG:32728) - same as LULC raster
     target_crs = "EPSG:32728"
-    
-    # Use bilinear resampling for continuous data (biomass values)
-    # This provides better quality when upsampling from 500m to 10m
+
     print(f"Reprojecting {biomass_input} from EPSG:4326 to {target_crs}...")
-    print("This will convert biomass from geographic coordinates to projected coordinates.")
-    print("The raster will be resampled to match the target CRS grid.\n")
-    
     reproject_raster(
-        biomass_input, 
-        biomass_output, 
+        biomass_input,
+        biomass_output,
         target_crs,
-        resampling_method=Resampling.bilinear  # Better for continuous data like biomass
+        resampling_method=Resampling.bilinear,
     )
     print("\nDone! Biomass raster is now in EPSG:32728")
-    print(f"Update main.py to use: '{biomass_output}'")

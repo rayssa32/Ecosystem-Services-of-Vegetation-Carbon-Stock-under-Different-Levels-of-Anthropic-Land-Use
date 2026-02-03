@@ -267,6 +267,7 @@ class AnalysisPipeline:
         vector_cities_path: str,
         city_field: str = "municipio",
         class_map: Optional[Dict[int, str]] = None,
+        cities_filter: Optional[List[str]] = None,
     ) -> None:
         """Run analysis to generate violin plots for biomass by land use class per city.
 
@@ -276,6 +277,7 @@ class AnalysisPipeline:
             vector_cities_path: Path to cities shapefile
             city_field: Field name containing city names
             class_map: Optional mapping from class codes to names
+            cities_filter: If set, only these cities are processed (e.g. ["Lavras"]). None = all.
         """
         # Validate paths
         all_paths = [class_raster_path, biomass_raster_path, vector_cities_path]
@@ -299,7 +301,8 @@ class AnalysisPipeline:
             # Process each city and collect data
             for _, row in gdf.iterrows():
                 city = str(row[city_field]).strip()
-
+                if cities_filter is not None and city not in cities_filter:
+                    continue
                 if row.geometry is None or row.geometry.is_empty:
                     continue
 
