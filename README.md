@@ -23,6 +23,7 @@ The pipeline:
 
 5. **Plots**:
    - **Violin** (and optionally bar/box): biomass distribution by land use class, per city or all cities combined.
+   - **Sankey**: land use → biomass class (quantile-based); proportional flows, thickness = count or % of pixels; one diagram per city or one combined (all cities).
    - **Moran's I**: spatial autocorrelation of biomass per municipality (Global Moran's I, p-value by permutation, optional Moran scatter plot).
 
 6. **Export** of CSVs and images to `dados_gerados/`.
@@ -41,16 +42,18 @@ project/
 │   ├── data/               # Raster and vector loading
 │   │   ├── raster_loader.py
 │   │   └── vector_loader.py
-│   ├── processing/        # Aggregation, statistics, Moran's I
+│   ├── processing/        # Aggregation, statistics, Moran's I, biomass classes
 │   │   ├── aggregator.py
 │   │   ├── statistics.py
-│   │   └── moran.py
+│   │   ├── moran.py
+│   │   └── biomass_classes.py
 │   ├── pipeline/          # Workflow orchestration
 │   │   ├── analysis_pipeline.py   # Violin, bar, box, stacked bar
 │   │   └── moran_pipeline.py     # Moran's I per city
 │   ├── visualization/     # Plot generation
 │   │   ├── plotter.py
-│   │   └── graphics_factory.py
+│   │   ├── graphics_factory.py
+│   │   └── sankey_plotter.py
 │   ├── utils/
 │   ├── run_moran.py       # Moran only: python -m src.run_moran
 │   └── reproject_raster.py # Reproject rasters: python -m src.reproject_raster
@@ -58,11 +61,11 @@ project/
 └── dados_gerados/         # Outputs (CSVs and PNGs)
 ```
 
-- **Configuration**: `PathsConfig` (paths), `MoranConfig` (Moran), `AnalysisConfig` (violin/bar/box pipeline). `main.py` builds these from the CONFIGURATION section at the top of the file.
+- **Configuration**: `PathsConfig` (paths), `MoranConfig` (Moran), `SankeyConfig` (Sankey), `AnalysisConfig` (violin/bar/box pipeline). `main.py` builds these from the CONFIGURATION section at the top of the file.
 - **Data**: `RasterLoader` (load, clip, resample, native-resolution clip) and `VectorLoader`.
-- **Processing**: aggregation by class, tests (ANOVA/Kruskal, Tukey/Dunn), Moran's I (spatial weights, permutations, scatter).
-- **Visualization**: plotters by type (violin, bar, box, stacked bar) via factory.
-- **Pipeline**: `AnalysisPipeline` for violin analysis; `run_moran_analysis()` for Moran per city.
+- **Processing**: aggregation by class, tests (ANOVA/Kruskal, Tukey/Dunn), Moran's I, biomass quantile classification for Sankey.
+- **Visualization**: plotters by type (violin, bar, box, stacked bar, Sankey) via factory or dedicated module.
+- **Pipeline**: `AnalysisPipeline` for violin and Sankey; `run_moran_analysis()` for Moran per city. Execution order: violin → Sankey → Moran.
 
 Further architecture details are in **`ARCHITECTURE.md`**.
 
@@ -75,7 +78,7 @@ Further architecture details are in **`ARCHITECTURE.md`**.
 - Python **3.10+**
 - Main dependencies: `numpy`, `pandas`, `rasterio`, `geopandas`, `shapely`, `affine`, `scipy`, `statsmodels`, `scikit-posthocs`, `matplotlib`
 
-For **Moran's I** you also need: `libpysal`, `esda` (and the rest of the project dependencies to run the `src` package). Use **`requirements-moran.txt`** for Moran-related deps; on PEP 668 systems (e.g. Fedora) use a virtual environment:
+For **Moran's I** and **Sankey** you also need: `libpysal`, `esda`, `plotly` (and the rest of the project dependencies to run the `src` package). Use **`requirements-moran.txt`** for these deps; on PEP 668 systems (e.g. Fedora) use a virtual environment:
 
 ```bash
 python -m venv .venv
@@ -91,9 +94,10 @@ Edit only the **CONFIGURATION** section at the top of **`main.py`**:
 
 - **PATHS**: class raster path, biomass raster path, cities shapefile path, municipality name field, output directory (`outdir`).
 - **CITIES_FILTER**: `None` for all cities, or a list of names, e.g. `["Lavras", "Varginha"]`.
-- **RUN_VIOLIN** / **RUN_MORAN**: enable or disable violin and Moran analyses.
+- **RUN_VIOLIN** / **RUN_SANKEY** / **RUN_MORAN**: enable or disable violin, Sankey, and Moran analyses (order: violin → Sankey → Moran).
 - **PLOT_TYPES**: plot types (e.g. `["violin"]`, `["bar"]`, `["box"]`).
 - **EXCLUDE_CLASSES_VIOLIN**: classes to exclude from violin plots (e.g. `[0]` for Water).
+- **Sankey**: `SANKEY_PER_CITY` (True = one Sankey per city; False = one combined), `SANKEY_N_QUANTILES` (e.g. 3 → Low/Medium/High), `SANKEY_USE_PERCENT` (thickness = % or count of pixels).
 - **Moran**: `MORAN_NATIVE_RESOLUTION` (True = biomass native resolution; False = resampled 10 m), `MORAN_PERMUTATIONS`, `MORAN_SAVE_SCATTER`.
 - **CLASS_MAP**: class id → label (e.g. `{0: "Water", 1: "Urban", ...}`).
 
@@ -131,6 +135,7 @@ All outputs go to **PATHS["outdir"]** (default: `./dados_gerados`).
 | `dados_gerados/stats/pairwise_<city>_<metric>_tukey.csv` / `_dunn_holm.csv` | Post-hoc comparisons. |
 | `dados_gerados/<city>_<metric>_violin.png` (and similar) | Plots per city/metric. |
 | `dados_gerados/all_cities_<metric>_violin_combined.png` | Combined violin (all cities). |
+| `dados_gerados/sankey/sankey_<City>.html` (or `sankey_all_cities.html`) | Sankey: land use → biomass class (interactive HTML). |
 | `dados_gerados/moran/moran_global_por_cidade.csv` or `moran_global_por_cidade_nativo.csv` | Global Moran's I per city. |
 | `dados_gerados/moran/moran_scatter_<City>.png` | Moran scatter per city (if enabled). |
 

@@ -27,6 +27,15 @@ class MoranConfig:
 
 
 @dataclass
+class SankeyConfig:
+    """Configuration for Sankey diagram (land use → biomass class)."""
+
+    per_city: bool = True  # True = one Sankey per city; False = one combined (all cities)
+    n_quantiles: int = 3  # Biomass classes (e.g. 3 → Low, Medium, High)
+    use_percentage: bool = True  # Link thickness = % of pixels; False = count
+
+
+@dataclass
 class AnalysisConfig:
     """Configuration parameters for statistical analysis and visualization."""
 
@@ -61,3 +70,4 @@ class AnalysisConfig:
 DEFAULT_CONFIG = AnalysisConfig()
 DEFAULT_PATHS = PathsConfig()
 DEFAULT_MORAN_CONFIG = MoranConfig()
+DEFAULT_SANKEY_CONFIG = SankeyConfig()
