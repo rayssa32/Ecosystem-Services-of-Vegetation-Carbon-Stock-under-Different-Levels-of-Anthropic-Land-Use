@@ -23,11 +23,14 @@ project/
 │   │   └── graphics_factory.py  # Factory for creating different plot types
 │   ├── pipeline/                # Orchestration layer
 │   │   ├── __init__.py
-│   │   └── analysis_pipeline.py # Main pipeline orchestration
+│   │   ├── analysis_pipeline.py # Main pipeline (violin, bar, box, stacked bar)
+│   │   └── moran_pipeline.py    # Moran's I por cidade
+│   ├── run_moran.py             # Moran's I (python -m src.run_moran)
+│   ├── reproject_raster.py      # Reprojetar rasters (python -m src.reproject_raster)
 │   └── utils/                   # Utility functions
 │       ├── __init__.py
 │       └── raster_utils.py      # Raster utility functions
-├── main.py                      # Application entry point
+├── main.py                      # Único entry point na raiz: configure e rode python main.py
 └── ...                          # Data files and outputs
 ```
 
@@ -55,9 +58,10 @@ Clear boundaries between layers with well-defined interfaces and minimal couplin
 ## Key Components
 
 ### Configuration (`src/config.py`)
-- `AnalysisConfig`: Dataclass containing all configuration parameters
+- `PathsConfig`: Paths comuns (rasters, shapefile, outdir)
+- `MoranConfig`: Opções do Moran's I (resolução nativa, permutações, etc.)
+- `AnalysisConfig`: Parâmetros do pipeline (plot_types, bar, violin, stacked bar)
 - Single source of truth for settings
-- Easy to extend with new parameters
 
 ### Data Layer (`src/data/`)
 - **RasterLoader**: Handles raster operations (loading, clipping, resampling)
@@ -78,8 +82,8 @@ Clear boundaries between layers with well-defined interfaces and minimal couplin
 - **GraphicsFactory**: Factory for creating and managing plotters
 
 ### Pipeline (`src/pipeline/`)
-- **AnalysisPipeline**: Orchestrates the entire analysis workflow
-- Coordinates data loading, processing, statistics, and visualization
+- **AnalysisPipeline**: Orchestrates analysis (violin, bar, box, stacked bar)
+- **run_moran_analysis()**: Moran's I por cidade, scatter plots e CSV (resolução nativa ou 10 m)
 
 ## Adding New Plot Types
 
