@@ -93,6 +93,34 @@ class RasterLoader:
 
         return class_clip, class_transform
 
+    def clip_raster_native(
+        self, src: rasterio.DatasetReader, geometry: List[dict]
+    ) -> Tuple[np.ndarray, rasterio.Affine]:
+        """Clip raster to geometry at its native resolution (no resampling).
+
+        Use para Moran's I "realista": biomassa na resolução nativa (ex. 500 m)
+        sem reamostrar para a grade do LULC. A geometria deve estar no CRS do raster.
+
+        Args:
+            src: Open rasterio dataset (e.g. biomass).
+            geometry: Geometry in GeoJSON format (same CRS as src).
+
+        Returns:
+            Tuple of (clipped 2D array, transform).
+        """
+        try:
+            ma, transform = rio_mask(src, geometry, crop=True, filled=False)
+        except ValueError:
+            raise ValueError("Geometry outside raster bounds")
+
+        out = ma[0].astype("float32", copy=False)
+        if np.ma.isMaskedArray(ma):
+            out[ma.mask[0]] = np.nan
+        if src.nodata is not None:
+            out[out == float(src.nodata)] = np.nan
+        out[out <= -1e10] = np.nan
+        return out, transform
+
     def clip_metric_raster(
         self,
         src_metric: rasterio.DatasetReader,
