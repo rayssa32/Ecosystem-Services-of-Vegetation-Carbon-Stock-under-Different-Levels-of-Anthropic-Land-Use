@@ -177,7 +177,9 @@ If the class raster is not projected, the script may fail.
 
 ## Statistical references
 
-- Field, A. (2018). *Discovering Statistics Using R.* SAGE.
+- Field, A. (2018). Discovering Statistics Using R. SAGE.
+- Anselin, L. (1995). Local Indicators of Spatial Association—LISA. Geographical Analysis.
+- Fortin, M.-J.; Dale, M. R. T. (2014). Spatial Analysis: A Guide for Ecologists. Cambridge University Press.
 - Zar, J. H. (2010). *Biostatistical Analysis.* Pearson.
 - Legendre & Fortin (1989). *Spatial pattern and ecological analysis.* Vegetatio.
 - Goslee & Urban (2007). *The ecodist package for dissimilarity-based analysis of ecological data.* Journal of Statistical Software.
