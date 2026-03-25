@@ -5,6 +5,7 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 
+from ..utils.constants import NULL_LULC_CLASS
 from ..utils.raster_utils import pixel_area_from_transform
 
 
@@ -28,6 +29,11 @@ class DataAggregator:
 
         v = values[mask]
         g = classes[mask].astype(int)
+        keep = g != NULL_LULC_CLASS
+        if not keep.any():
+            return pd.DataFrame(columns=["classe", "mean", "median", "std", "sum", "count"])
+        v = v[keep]
+        g = g[keep]
 
         df = pd.DataFrame({"classe": g, "val": v})
         return df.groupby("classe", as_index=False)["val"].agg(
@@ -123,7 +129,11 @@ class DataAggregator:
             return pd.DataFrame(columns=["classe", "percentage"])
 
         cls = classes[mask].astype(int)
-        
+        # Exclude NULL (0); coverage % is relative to non-NULL pixels only
+        cls = cls[cls != NULL_LULC_CLASS]
+        if cls.size == 0:
+            return pd.DataFrame(columns=["classe", "percentage"])
+
         # Count pixels per class
         unique, counts = np.unique(cls, return_counts=True)
         total_pixels = cls.size

@@ -19,7 +19,7 @@ from ..visualization.graphics_factory import GraphicsFactory
 from ..visualization.plotter import ViolinPlotter
 from ..visualization.sankey_plotter import build_flow_df, plot_sankey
 from ..utils.raster_utils import pixel_area_from_transform
-from ..utils.constants import CLASS_COLORS
+from ..utils.constants import CLASS_COLORS, NULL_LULC_CLASS
 
 
 class AnalysisPipeline:
@@ -45,6 +45,7 @@ class AnalysisPipeline:
         vector_cities_path: str = None,
         city_field: str = "municipio",
         class_map: Optional[Dict[int, str]] = None,
+        cities_filter: Optional[List[str]] = None,
     ) -> pd.DataFrame:
         """Execute complete analysis pipeline.
 
@@ -54,6 +55,7 @@ class AnalysisPipeline:
             vector_cities_path: Path to cities shapefile
             city_field: Field name containing city names
             class_map: Optional mapping from class codes to names
+            cities_filter: If set, only these municipalities are processed (None = all)
 
         Returns:
             Combined DataFrame with statistics from all cities
@@ -95,6 +97,8 @@ class AnalysisPipeline:
             # Process each city
             for _, row in gdf.iterrows():
                 city = str(row[city_field]).strip()
+                if cities_filter is not None and city not in cities_filter:
+                    continue
 
                 if row.geometry is None or row.geometry.is_empty:
                     continue
@@ -119,6 +123,9 @@ class AnalysisPipeline:
                         continue
                     # Add metadata
                     df_city = self.aggregator.add_metadata(df_city, city, class_map)
+                    _excl = set(self.config.exclude_classes or [])
+                    _excl.add(NULL_LULC_CLASS)
+                    df_city = df_city[~df_city["classe"].isin(_excl)].copy()
                 else:
                     # Process each metric
                     metric_stats: List[pd.DataFrame] = []
@@ -156,6 +163,9 @@ class AnalysisPipeline:
 
                     # Add metadata
                     df_city = self.aggregator.add_metadata(df_city, city, class_map)
+                    _excl = set(self.config.exclude_classes or [])
+                    _excl.add(NULL_LULC_CLASS)
+                    df_city = df_city[~df_city["classe"].isin(_excl)].copy()
 
                 # Save city-specific CSV if enabled
                 if self.config.save_csv_files:
@@ -386,7 +396,6 @@ class AnalysisPipeline:
 
         # Collect per-city data and pool biomass for global quantile edges
         city_data_list: List[tuple] = []
-        all_biomass: List[np.ndarray] = []
 
         with self.raster_loader.load_classification_raster(
             class_raster_path
@@ -418,19 +427,26 @@ class AnalysisPipeline:
                 if not np.any(valid):
                     continue
                 city_data_list.append((city, class_clip, biomass_clip))
-                all_biomass.append(biomass_clip)
 
         if not city_data_list:
             print("[Warning] No valid city data for Sankey. Skipping.")
             return
 
-        # Global quantile edges (pooled biomass); use plain ndarray to avoid numpy partition/mask warnings
-        pooled = np.concatenate([np.asarray(b, dtype=np.float64).ravel() for b in all_biomass])
-        if np.ma.isMaskedArray(pooled):
-            pooled = np.ma.filled(pooled, np.nan)
-        pooled = pooled[~np.isnan(pooled)]
+        # Pool biomass only over pixels whose LULC is not excluded (NULL, water, etc.) for quantile edges
+        excl_q = {NULL_LULC_CLASS}
+        if self.config.exclude_classes:
+            excl_q.update(int(x) for x in self.config.exclude_classes)
+        pooled_parts: List[np.ndarray] = []
+        for _, class_clip, biomass_clip in city_data_list:
+            c = np.asarray(class_clip).ravel().astype(int)
+            b = np.asarray(biomass_clip, dtype=np.float64).ravel()
+            m = ~(np.isnan(np.asarray(class_clip, dtype=np.float64).ravel()) | np.isnan(b))
+            for code in excl_q:
+                m &= c != code
+            pooled_parts.append(b[m])
+        pooled = np.concatenate(pooled_parts) if pooled_parts else np.array([])
         if pooled.size == 0:
-            print("[Warning] No valid biomass for Sankey. Skipping.")
+            print("[Warning] No valid biomass for Sankey after LULC exclusions. Skipping.")
             return
         pooled = np.asarray(pooled, dtype=np.float64)
         edges = np.nanquantile(
@@ -448,6 +464,7 @@ class AnalysisPipeline:
                 class_map,
                 biomass_labels,
                 use_percentage=sankey_config.use_percentage,
+                exclude_land_use_classes=self.config.exclude_classes,
             )
             if flow_df.empty:
                 return

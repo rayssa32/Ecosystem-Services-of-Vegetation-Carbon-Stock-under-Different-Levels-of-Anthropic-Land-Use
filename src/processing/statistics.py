@@ -10,6 +10,7 @@ from statsmodels.stats.multicomp import pairwise_tukeyhsd
 import scikit_posthocs as sp
 
 from ..config import AnalysisConfig
+from ..utils.constants import NULL_LULC_CLASS
 
 
 class StatisticsAnalyzer:
@@ -49,6 +50,8 @@ class StatisticsAnalyzer:
         rng = np.random.default_rng(self.config.rng_seed)
 
         for c in np.unique(cls):
+            if c == NULL_LULC_CLASS:
+                continue
             if c in self.config.exclude_classes:
                 continue
 
