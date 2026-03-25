@@ -8,7 +8,7 @@ from typing import List, Optional
 class PathsConfig:
     """Paths comuns a main.py e run_moran.py."""
 
-    class_raster_path: str = "classificacao/LULC_7_cidades_2025-07-10_2025-07-30_projected.tif"
+    class_raster_path: str = "classificacao/LULC_7Cidades_10m_20250710_20250730_projected.tif"
     biomass_raster_path: str = "metricas/Biomass_sete_cidades_projected.tif"
     vector_cities_path: str = "shapefile/sete_cidades.shp"
     city_field: str = "NM_MUN"
@@ -62,7 +62,7 @@ class AnalysisConfig:
     def __post_init__(self):
         """Initialize default values for mutable fields."""
         if self.exclude_classes is None:
-            self.exclude_classes = [5]
+            self.exclude_classes = [0]  # NULL LULC (index 0); excluded from plots/stats
         if self.plot_types is None:
             self.plot_types = ["bar"]
 

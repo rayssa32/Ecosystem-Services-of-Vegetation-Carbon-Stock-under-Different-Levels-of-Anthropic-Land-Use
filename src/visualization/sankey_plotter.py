@@ -18,24 +18,39 @@ def build_flow_df(
     class_map: Dict[int, str],
     biomass_labels: List[str],
     use_percentage: bool = True,
+    exclude_land_use_classes: Optional[List[int]] = None,
 ) -> pd.DataFrame:
     """Build flow DataFrame (source, target, value) from pixel-level land use and biomass class.
 
     Args:
         land_use_flat: 1D array of land use class codes (int or float).
         biomass_class_flat: 1D array of biomass class indices 0..n_quantiles-1.
-        class_map: Mapping class code → label (e.g. {0: "Água", 1: "Urbano", ...}).
+        class_map: Mapping class code → label (e.g. {0: "NULL", 1: "Água", 2: "Urbano", ...}).
         biomass_labels: Labels for biomass classes (e.g. ["Low", "Medium", "High"]).
         use_percentage: If True, value = % of pixels; else count.
+        exclude_land_use_classes: LULC codes to drop (NULL = 0 is always excluded).
 
     Returns:
         DataFrame with columns source, target, value (and optionally count).
     """
     import numpy as np
 
+    from ..utils.constants import NULL_LULC_CLASS
+
     mask = ~(np.isnan(land_use_flat) | np.isnan(biomass_class_flat))
     lu = land_use_flat[mask].astype(int)
     bc = biomass_class_flat[mask].astype(int)
+
+    exc = {NULL_LULC_CLASS}
+    if exclude_land_use_classes:
+        exc.update(int(x) for x in exclude_land_use_classes)
+    keep = np.ones(len(lu), dtype=bool)
+    for code in exc:
+        keep &= lu != code
+    lu = lu[keep]
+    bc = bc[keep]
+    if lu.size == 0:
+        return pd.DataFrame()
 
     # Map to labels
     source_labels = [class_map.get(c, str(c)) for c in lu]

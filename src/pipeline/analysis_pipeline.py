@@ -19,7 +19,7 @@ from ..visualization.graphics_factory import GraphicsFactory
 from ..visualization.plotter import ViolinPlotter
 from ..visualization.sankey_plotter import build_flow_df, plot_sankey
 from ..utils.raster_utils import pixel_area_from_transform
-from ..utils.constants import CLASS_COLORS
+from ..utils.constants import CLASS_COLORS, NULL_LULC_CLASS
 
 
 class AnalysisPipeline:
@@ -45,6 +45,7 @@ class AnalysisPipeline:
         vector_cities_path: str = None,
         city_field: str = "municipio",
         class_map: Optional[Dict[int, str]] = None,
+        cities_filter: Optional[List[str]] = None,
     ) -> pd.DataFrame:
         """Execute complete analysis pipeline.
 
@@ -54,6 +55,7 @@ class AnalysisPipeline:
             vector_cities_path: Path to cities shapefile
             city_field: Field name containing city names
             class_map: Optional mapping from class codes to names
+            cities_filter: If set, only these municipalities are processed (None = all)
 
         Returns:
             Combined DataFrame with statistics from all cities
@@ -95,6 +97,8 @@ class AnalysisPipeline:
             # Process each city
             for _, row in gdf.iterrows():
                 city = str(row[city_field]).strip()
+                if cities_filter is not None and city not in cities_filter:
+                    continue
 
                 if row.geometry is None or row.geometry.is_empty:
                     continue
@@ -119,6 +123,9 @@ class AnalysisPipeline:
                         continue
                     # Add metadata
                     df_city = self.aggregator.add_metadata(df_city, city, class_map)
+                    _excl = set(self.config.exclude_classes or [])
+                    _excl.add(NULL_LULC_CLASS)
+                    df_city = df_city[~df_city["classe"].isin(_excl)].copy()
                 else:
                     # Process each metric
                     metric_stats: List[pd.DataFrame] = []
@@ -156,6 +163,9 @@ class AnalysisPipeline:
 
                     # Add metadata
                     df_city = self.aggregator.add_metadata(df_city, city, class_map)
+                    _excl = set(self.config.exclude_classes or [])
+                    _excl.add(NULL_LULC_CLASS)
+                    df_city = df_city[~df_city["classe"].isin(_excl)].copy()
 
                 # Save city-specific CSV if enabled
                 if self.config.save_csv_files:
@@ -448,6 +458,7 @@ class AnalysisPipeline:
                 class_map,
                 biomass_labels,
                 use_percentage=sankey_config.use_percentage,
+                exclude_land_use_classes=self.config.exclude_classes,
             )
             if flow_df.empty:
                 return

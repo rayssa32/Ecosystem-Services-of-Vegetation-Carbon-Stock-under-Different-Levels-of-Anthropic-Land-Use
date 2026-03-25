@@ -9,7 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from ..config import AnalysisConfig
-from ..utils.constants import CLASS_COLORS, DEFAULT_CLASS_COLORS
+from ..utils.constants import CLASS_COLORS, DEFAULT_CLASS_COLORS, NULL_LULC_CLASS
 
 
 class BasePlotter(ABC):
@@ -413,7 +413,7 @@ class ViolinPlotter(BasePlotter):
     ) -> Tuple[Dict[str, np.ndarray], List[str]]:
         """Prepare data organized by class for plotting.
 
-        Excludes classes specified in config.exclude_classes (e.g., water class).
+        Excludes classes specified in config.exclude_classes (e.g., NULL LULC = 0).
 
         Args:
             values: Raw metric values
@@ -436,7 +436,9 @@ class ViolinPlotter(BasePlotter):
         unique_classes = sorted(np.unique(cls))
 
         for class_code in unique_classes:
-            # Skip excluded classes (e.g., water class = 0)
+            if class_code == NULL_LULC_CLASS:
+                continue
+            # Skip excluded classes (e.g., extra codes beyond NULL)
             if class_code in self.config.exclude_classes:
                 continue
 
@@ -581,6 +583,11 @@ class StackedBarPlotter:
         # Validate input
         if not self._validate_input(combined_df, metric, value_type):
             return
+
+        if "classe" in combined_df.columns:
+            _excl = set(self.config.exclude_classes or [])
+            _excl.add(NULL_LULC_CLASS)
+            combined_df = combined_df[~combined_df["classe"].isin(_excl)].copy()
 
         # Prepare data
         value_col, label_col = self._determine_columns(combined_df, metric, value_type)
@@ -775,7 +782,7 @@ class StackedBarPlotter:
 
         # Set title
         if value_type == "percentage":
-            title = "Stacked Bar Chart: Land Use Class Coverage (%) by City"
+            title = "Land Use Class Coverage (%) by City"
         else:
             title = f"Stacked Bar Chart: {metric} by City and Land Use Class"
 

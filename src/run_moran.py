@@ -13,7 +13,7 @@ from .pipeline.moran_pipeline import run_moran_analysis
 
 def main() -> None:
     paths = PathsConfig(
-        class_raster_path="classificacao/LULC_7_cidades_2025-07-10_2025-07-30_projected.tif",
+        class_raster_path="classificacao/LULC_7Cidades_10m_20250710_20250730_projected.tif",
         biomass_raster_path="metricas/Biomass_sete_cidades_projected.tif",
         vector_cities_path="shapefile/sete_cidades.shp",
         city_field="NM_MUN",

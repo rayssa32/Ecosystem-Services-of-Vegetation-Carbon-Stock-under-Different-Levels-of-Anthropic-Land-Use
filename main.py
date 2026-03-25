@@ -17,7 +17,7 @@ from src.config import PathsConfig, MoranConfig, SankeyConfig
 
 # ---- Arquivos ----
 PATHS = {
-    "class_raster": "classificacao/LULC_7_cidades_2025-07-10_2025-07-30_projected.tif",
+    "class_raster": "classificacao/LULC_7Cidades_10m_20250710_20250730_projected.tif",
     "biomass_raster": "metricas/Biomass_sete_cidades_projected.tif",
     "vector_cities": "shapefile/sete_cidades.shp",
     "city_field": "NM_MUN",
@@ -32,10 +32,13 @@ CITIES_FILTER: Optional[List[str]] = None
 RUN_VIOLIN = False  # Gráfico de violino (biomassa por classe de uso, cidades combinadas)
 RUN_SANKEY = True   # Sankey: uso do solo → classe de biomassa (quantis); um por cidade ou geral
 RUN_MORAN = False   # Moran's I + scatter por cidade (resolução nativa da biomassa)
+RUN_STACKED_LULC = True  # Barras empilhadas: cobertura (%) por classe de uso do solo, por cidade
 
 # ---- Opções do gráfico de violino ----
 PLOT_TYPES = ["violin"]   # Opções: "violin" | "bar" | "box"
-EXCLUDE_CLASSES_VIOLIN = [0]   # Ex.: [0] = Água
+# Classe 0 = NULL (raster); não entra em gráficos nem agregações
+EXCLUDE_NULL_LULC = [0]
+EXCLUDE_CLASSES_VIOLIN = EXCLUDE_NULL_LULC
 
 # ---- Opções do Sankey (se RUN_SANKEY = True) ----
 SANKEY_PER_CITY = True   # True = um Sankey por cidade; False = um Sankey geral (todas as cidades)
@@ -47,13 +50,14 @@ MORAN_NATIVE_RESOLUTION = True   # True = resolução nativa; False = reamostrad
 MORAN_PERMUTATIONS = 999
 MORAN_SAVE_SCATTER = True
 
-# ---- Nomes das classes (LULC) ----
+# ---- Nomes das classes (LULC): 0 = NULL; cobertura válida 1–5 ----
 CLASS_MAP = {
-    0: "Água",
-    1: "Urbano",
-    2: "Solo",
-    3: "Vegetação",
-    4: "Agro/Pasto",
+    0: "NULL",
+    1: "Água",
+    2: "Urbano",
+    3: "Solo",
+    4: "Vegetação",
+    5: "Agro/Pasto",
 }
 
 # =============================================================================
@@ -144,6 +148,34 @@ def main() -> None:
             sankey_config=sankey_cfg,
         )
         print("[OK] Sankey concluído.")
+
+    if RUN_STACKED_LULC:
+        if not _validate_paths(paths, need_class=True):
+            return
+        config = AnalysisConfig(
+            resample_metrics="nearest",
+            make_plots=False,
+            outdir=paths.outdir,
+            make_stacked_bar_charts=True,
+            save_csv_files=True,
+            run_inferential_tests=False,
+            exclude_classes=EXCLUDE_NULL_LULC,
+            sample_per_class=5000,
+            min_n_for_tests=10,
+            alpha=0.05,
+            rng_seed=42,
+        )
+        pipeline = AnalysisPipeline(config)
+        pipeline.run(
+            class_raster_path=paths.class_raster_path,
+            metrics_rasters=None,
+            vector_cities_path=paths.vector_cities_path,
+            city_field=paths.city_field,
+            class_map=CLASS_MAP,
+            cities_filter=CITIES_FILTER,
+        )
+        out_png = os.path.join(paths.outdir, "stacked_bar_land_use_percentage.png")
+        print(f"[OK] Gráfico LULC empilhado: {out_png}")
 
     if RUN_MORAN:
         if not _validate_paths(paths, need_class=not MORAN_NATIVE_RESOLUTION):
