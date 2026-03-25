@@ -30,16 +30,19 @@ CITIES_FILTER: Optional[List[str]] = None
 # Exemplos: None  |  ["Lavras"]  |  ["Lavras", "Varginha", "Alfenas"]
 
 # ---- O que rodar ----
-RUN_VIOLIN = True  # Gráfico de violino (biomassa por classe de uso, cidades combinadas)
-RUN_SANKEY = True   # Sankey: uso do solo → classe de biomassa (quantis); um por cidade ou geral
-RUN_MORAN = True   # Moran's I + scatter por cidade (resolução nativa da biomassa)
-RUN_STACKED_LULC = True  # Barras empilhadas: cobertura (%) por classe de uso do solo, por cidade
+RUN_VIOLIN = False  # Gráfico de violino (biomassa por classe de uso, cidades combinadas)
+RUN_SANKEY = False   # Sankey: uso do solo → classe de biomassa (quantis); um por cidade ou geral
+RUN_MORAN = False   # Moran's I + scatter por cidade (resolução nativa da biomassa)
+RUN_STACKED_LULC = False  # Barras empilhadas: cobertura (%) por classe de uso do solo, por cidade
+RUN_SHANNON = False  # Shannon (H') e equitabilidade de Pielou (J') sobre proporções LULC por cidade
 
 # ---- Opções do gráfico de violino ----
 PLOT_TYPES = ["violin"]   # Opções: "violin" | "bar" | "box"
 # NULL (0) e Água (1) não entram em violino/Sankey
 EXCLUDE_NULL_LULC = [NULL_LULC_CLASS]
 EXCLUDE_CLASSES_VIOLIN = [NULL_LULC_CLASS, WATER_LULC_CLASS]
+# Shannon: NULL (0) é sempre excluído no cálculo; adicione aqui outras classes se quiser (ex.: água)
+EXCLUDE_CLASSES_SHANNON: List[int] = []
 
 # ---- Opções do Sankey (se RUN_SANKEY = True) ----
 SANKEY_PER_CITY = True   # True = um Sankey por cidade; False = um Sankey geral (todas as cidades)
@@ -177,6 +180,31 @@ def main() -> None:
         )
         out_png = os.path.join(paths.outdir, "stacked_bar_land_use_percentage.png")
         print(f"[OK] Gráfico LULC empilhado: {out_png}")
+
+    if RUN_SHANNON:
+        if not _validate_paths(paths, need_class=True):
+            return
+        config = AnalysisConfig(
+            resample_metrics="nearest",
+            make_plots=False,
+            outdir=paths.outdir,
+            make_stacked_bar_charts=False,
+            save_csv_files=True,
+            run_inferential_tests=False,
+            exclude_classes=EXCLUDE_CLASSES_SHANNON,
+            sample_per_class=5000,
+            min_n_for_tests=10,
+            alpha=0.05,
+            rng_seed=42,
+        )
+        pipeline = AnalysisPipeline(config)
+        pipeline.run_shannon_index_analysis(
+            class_raster_path=paths.class_raster_path,
+            vector_cities_path=paths.vector_cities_path,
+            city_field=paths.city_field,
+            cities_filter=CITIES_FILTER,
+        )
+        print("[OK] Shannon / equitabilidade concluído.")
 
     if RUN_MORAN:
         if not _validate_paths(paths, need_class=not MORAN_NATIVE_RESOLUTION):
