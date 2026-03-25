@@ -1,6 +1,6 @@
 """Data aggregation by land use classes."""
 
-from typing import Dict, List
+from typing import Dict, List, Optional, Set, Union
 
 import numpy as np
 import pandas as pd
@@ -11,6 +11,37 @@ from ..utils.raster_utils import pixel_area_from_transform
 
 class DataAggregator:
     """Aggregates metric data by land use classes."""
+
+    @staticmethod
+    def _lulc_valid_pixels(
+        classes: np.ndarray,
+        exclude_classes: Optional[Set[int]] = None,
+    ) -> np.ndarray:
+        """1D class values after dropping NaNs, NULL (0), and optional exclusions."""
+        excl: Set[int] = {NULL_LULC_CLASS}
+        if exclude_classes:
+            excl.update(int(x) for x in exclude_classes)
+
+        mask = ~np.isnan(classes)
+        if not mask.any():
+            return np.array([], dtype=int)
+
+        cls = classes[mask].astype(int)
+        for code in excl:
+            cls = cls[cls != code]
+        return cls
+
+    @staticmethod
+    def _area_percentages_from_valid_pixels(cls: np.ndarray) -> pd.DataFrame:
+        """Area % per class: same as pixel % on a uniform grid (counts / total * 100)."""
+        if cls.size == 0:
+            return pd.DataFrame(columns=["classe", "percentage"])
+
+        unique, counts = np.unique(cls, return_counts=True)
+        total = cls.size
+        percentages = (counts.astype(np.float64) / total) * 100.0
+        df = pd.DataFrame({"classe": unique, "percentage": percentages})
+        return df.sort_values("classe")
 
     @staticmethod
     def summarize_by_classes(values: np.ndarray, classes: np.ndarray) -> pd.DataFrame:
@@ -114,34 +145,75 @@ class DataAggregator:
         return df
 
     @staticmethod
-    def calculate_class_area_percentages(classes: np.ndarray) -> pd.DataFrame:
+    def calculate_class_area_percentages(
+        classes: np.ndarray,
+        exclude_classes: Optional[Set[int]] = None,
+    ) -> pd.DataFrame:
         """Calculate percentage area covered by each land use class.
+
+        On a uniform grid, pixel counts are proportional to area; % area matches
+        stacked-bar LULC charts. NULL (0) is always excluded; optional
+        ``exclude_classes`` removes further codes from the denominator.
 
         Args:
             classes: Classification array
+            exclude_classes: Optional extra class codes to omit (e.g. water)
 
         Returns:
             DataFrame with classe and percentage columns
         """
-        # Remove NaN values
-        mask = ~np.isnan(classes)
-        if not mask.any():
-            return pd.DataFrame(columns=["classe", "percentage"])
+        cls = DataAggregator._lulc_valid_pixels(classes, exclude_classes)
+        return DataAggregator._area_percentages_from_valid_pixels(cls)
 
-        cls = classes[mask].astype(int)
-        # Exclude NULL (0); coverage % is relative to non-NULL pixels only
-        cls = cls[cls != NULL_LULC_CLASS]
+    @staticmethod
+    def shannon_entropy_land_cover(
+        classes: np.ndarray,
+        exclude_classes: Optional[Set[int]] = None,
+    ) -> Dict[str, Union[float, int]]:
+        """Shannon H' and Pielou equitability J' from LULC area fractions.
+
+        H' = -Σ p_i ln(p_i) with ``p_i = percent_i/100`` from
+        :meth:`calculate_class_area_percentages`. Equitability J' = H' / ln(S) where
+        S is the number of classes present (same ln base as H').
+
+        Args:
+            classes: Classification array (e.g. clipped LULC raster)
+            exclude_classes: Optional class codes to omit (NULL is always excluded)
+
+        Returns:
+            Dictionary with shannon_H, equitability_J (Pielou J' = H'/ln(S)),
+            n_classes (S), n_pixels. shannon_H and equitability_J are NaN if no
+            pixels remain. For S=1, equitability_J is 1.0 (degenerate case).
+        """
+        cls = DataAggregator._lulc_valid_pixels(classes, exclude_classes)
         if cls.size == 0:
-            return pd.DataFrame(columns=["classe", "percentage"])
+            return {
+                "shannon_H": np.nan,
+                "equitability_J": np.nan,
+                "n_classes": 0,
+                "n_pixels": 0,
+            }
 
-        # Count pixels per class
-        unique, counts = np.unique(cls, return_counts=True)
-        total_pixels = cls.size
-        
-        # Calculate percentages
-        percentages = (counts / total_pixels) * 100
-        
-        df = pd.DataFrame({"classe": unique, "percentage": percentages})
-        df = df.sort_values("classe")
-        
-        return df
+        df = DataAggregator._area_percentages_from_valid_pixels(cls)
+        if df.empty:
+            return {
+                "shannon_H": np.nan,
+                "equitability_J": np.nan,
+                "n_classes": 0,
+                "n_pixels": 0,
+            }
+
+        p = df["percentage"].to_numpy(dtype=np.float64) / 100.0
+        shannon_h = float(-(p * np.log(p)).sum())
+        s = int(len(df))
+        if s <= 1:
+            equitability_j = 1.0 if s == 1 else np.nan
+        else:
+            equitability_j = float(shannon_h / np.log(s))
+
+        return {
+            "shannon_H": shannon_h,
+            "equitability_J": equitability_j,
+            "n_classes": s,
+            "n_pixels": int(cls.size),
+        }

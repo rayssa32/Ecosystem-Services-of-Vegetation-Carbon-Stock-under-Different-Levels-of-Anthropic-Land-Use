@@ -2,7 +2,7 @@
 
 import os
 from contextlib import ExitStack
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 import numpy as np
 import pandas as pd
@@ -487,3 +487,69 @@ class AnalysisPipeline:
             class_all = np.concatenate([c.ravel() for _, c, _ in city_data_list])
             biomass_all = np.concatenate([b.ravel() for _, _, b in city_data_list])
             _make_flow_and_plot("", class_all, biomass_all, "sankey_all_cities")
+
+    def run_shannon_index_analysis(
+        self,
+        class_raster_path: str,
+        vector_cities_path: str,
+        city_field: str = "municipio",
+        cities_filter: Optional[List[str]] = None,
+    ) -> pd.DataFrame:
+        """Compute Shannon (H') and Pielou equitability (J') per municipality; save CSV.
+
+        H' = -Σ p_i ln(p_i); J' = H' / ln(S) with S = number of LULC classes (richness).
+        NULL is always excluded; additional exclusions follow ``config.exclude_classes``.
+        """
+        all_paths = [class_raster_path, vector_cities_path]
+        self.raster_loader.validate_paths(all_paths)
+        os.makedirs(self.config.outdir, exist_ok=True)
+
+        excl: Set[int] = set()
+        if self.config.exclude_classes:
+            excl.update(int(x) for x in self.config.exclude_classes)
+
+        rows: List[Dict[str, object]] = []
+
+        with self.raster_loader.load_classification_raster(
+            class_raster_path
+        ) as src_class:
+            gdf = self.vector_loader.load_cities(
+                vector_cities_path, city_field, src_class.crs
+            )
+            for _, row in gdf.iterrows():
+                city = str(row[city_field]).strip()
+                if cities_filter is not None and city not in cities_filter:
+                    continue
+                if row.geometry is None or row.geometry.is_empty:
+                    continue
+                geom = [mapping(row.geometry)]
+                try:
+                    class_clip, _ = self.raster_loader.clip_classification(
+                        src_class, geom
+                    )
+                except ValueError:
+                    continue
+
+                stats = self.aggregator.shannon_entropy_land_cover(
+                    class_clip, exclude_classes=excl
+                )
+                rows.append(
+                    {
+                        "cidade": city,
+                        "shannon_H": stats["shannon_H"],
+                        "equitability_J": stats["equitability_J"],
+                        "n_classes": stats["n_classes"],
+                        "n_pixels": stats["n_pixels"],
+                    }
+                )
+
+        df = pd.DataFrame(rows)
+        if not df.empty and self.config.save_csv_files:
+            out_csv = os.path.join(
+                self.config.outdir, "shannon_index_por_cidade.csv"
+            )
+            df.to_csv(out_csv, index=False)
+            print(f"[OK] Shannon / equitability: {out_csv}")
+        elif df.empty:
+            print("[Warning] No Shannon index rows (no cities or no valid pixels).")
+        return df
