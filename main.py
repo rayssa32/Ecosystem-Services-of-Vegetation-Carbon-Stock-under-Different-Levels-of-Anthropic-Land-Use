@@ -9,6 +9,7 @@ from typing import List, Optional
 
 from src import AnalysisConfig, AnalysisPipeline, run_moran_analysis
 from src.config import PathsConfig, MoranConfig, SankeyConfig
+from src.utils.constants import NULL_LULC_CLASS, WATER_LULC_CLASS
 
 
 # =============================================================================
@@ -29,16 +30,16 @@ CITIES_FILTER: Optional[List[str]] = None
 # Exemplos: None  |  ["Lavras"]  |  ["Lavras", "Varginha", "Alfenas"]
 
 # ---- O que rodar ----
-RUN_VIOLIN = False  # Gráfico de violino (biomassa por classe de uso, cidades combinadas)
+RUN_VIOLIN = True  # Gráfico de violino (biomassa por classe de uso, cidades combinadas)
 RUN_SANKEY = True   # Sankey: uso do solo → classe de biomassa (quantis); um por cidade ou geral
-RUN_MORAN = False   # Moran's I + scatter por cidade (resolução nativa da biomassa)
+RUN_MORAN = True   # Moran's I + scatter por cidade (resolução nativa da biomassa)
 RUN_STACKED_LULC = True  # Barras empilhadas: cobertura (%) por classe de uso do solo, por cidade
 
 # ---- Opções do gráfico de violino ----
 PLOT_TYPES = ["violin"]   # Opções: "violin" | "bar" | "box"
-# Classe 0 = NULL (raster); não entra em gráficos nem agregações
-EXCLUDE_NULL_LULC = [0]
-EXCLUDE_CLASSES_VIOLIN = EXCLUDE_NULL_LULC
+# NULL (0) e Água (1) não entram em violino/Sankey
+EXCLUDE_NULL_LULC = [NULL_LULC_CLASS]
+EXCLUDE_CLASSES_VIOLIN = [NULL_LULC_CLASS, WATER_LULC_CLASS]
 
 # ---- Opções do Sankey (se RUN_SANKEY = True) ----
 SANKEY_PER_CITY = True   # True = um Sankey por cidade; False = um Sankey geral (todas as cidades)

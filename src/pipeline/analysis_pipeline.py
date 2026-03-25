@@ -396,7 +396,6 @@ class AnalysisPipeline:
 
         # Collect per-city data and pool biomass for global quantile edges
         city_data_list: List[tuple] = []
-        all_biomass: List[np.ndarray] = []
 
         with self.raster_loader.load_classification_raster(
             class_raster_path
@@ -428,19 +427,26 @@ class AnalysisPipeline:
                 if not np.any(valid):
                     continue
                 city_data_list.append((city, class_clip, biomass_clip))
-                all_biomass.append(biomass_clip)
 
         if not city_data_list:
             print("[Warning] No valid city data for Sankey. Skipping.")
             return
 
-        # Global quantile edges (pooled biomass); use plain ndarray to avoid numpy partition/mask warnings
-        pooled = np.concatenate([np.asarray(b, dtype=np.float64).ravel() for b in all_biomass])
-        if np.ma.isMaskedArray(pooled):
-            pooled = np.ma.filled(pooled, np.nan)
-        pooled = pooled[~np.isnan(pooled)]
+        # Pool biomass only over pixels whose LULC is not excluded (NULL, water, etc.) for quantile edges
+        excl_q = {NULL_LULC_CLASS}
+        if self.config.exclude_classes:
+            excl_q.update(int(x) for x in self.config.exclude_classes)
+        pooled_parts: List[np.ndarray] = []
+        for _, class_clip, biomass_clip in city_data_list:
+            c = np.asarray(class_clip).ravel().astype(int)
+            b = np.asarray(biomass_clip, dtype=np.float64).ravel()
+            m = ~(np.isnan(np.asarray(class_clip, dtype=np.float64).ravel()) | np.isnan(b))
+            for code in excl_q:
+                m &= c != code
+            pooled_parts.append(b[m])
+        pooled = np.concatenate(pooled_parts) if pooled_parts else np.array([])
         if pooled.size == 0:
-            print("[Warning] No valid biomass for Sankey. Skipping.")
+            print("[Warning] No valid biomass for Sankey after LULC exclusions. Skipping.")
             return
         pooled = np.asarray(pooled, dtype=np.float64)
         edges = np.nanquantile(

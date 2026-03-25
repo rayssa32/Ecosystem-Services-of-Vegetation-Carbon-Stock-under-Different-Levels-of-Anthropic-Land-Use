@@ -2,6 +2,8 @@
 
 # LULC raster: class 0 = NULL / no label; valid land-cover codes are 1–5.
 NULL_LULC_CLASS = 0
+# Água (water); often excluded from violin/Sankey alongside NULL
+WATER_LULC_CLASS = 1
 
 # Land use class color mapping (keys match raster codes; NULL has no plot color)
 # 1-Água | 2-Urbano | 3-Solo | 4-Vegetação | 5-Agro/Pasto
