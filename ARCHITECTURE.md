@@ -34,6 +34,7 @@ project/
 │       ├── __init__.py
 │       └── raster_utils.py      # Raster utility functions
 ├── main.py                      # Single entry point at root: configure and run python main.py
+│   ├── user_runner.py           # Simplified runner for main.py (Portuguese UX)
 └── ...                          # Data files and outputs
 ```
 

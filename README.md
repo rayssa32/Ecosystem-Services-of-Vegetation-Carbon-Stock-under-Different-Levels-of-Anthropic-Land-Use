@@ -50,6 +50,7 @@ project/
 │   ├── pipeline/          # Workflow orchestration
 │   │   ├── analysis_pipeline.py   # Violin, bar, box, stacked bar
 │   │   └── moran_pipeline.py     # Moran's I per city
+│   ├── user_runner.py     # Execução simplificada chamada pelo main.py
 │   ├── visualization/     # Plot generation
 │   │   ├── plotter.py
 │   │   ├── graphics_factory.py
@@ -61,7 +62,7 @@ project/
 └── dados_gerados/         # Outputs (CSVs and PNGs)
 ```
 
-- **Configuration**: `PathsConfig` (paths), `MoranConfig` (Moran), `SankeyConfig` (Sankey), `AnalysisConfig` (violin/bar/box pipeline). `main.py` builds these from the CONFIGURATION section at the top of the file.
+- **Configuration**: edit only the **CONFIGURAÇÃO** section in **`main.py`**. Technical defaults live in `src/user_runner.py` and `src/config.py`.
 - **Data**: `RasterLoader` (load, clip, resample, native-resolution clip) and `VectorLoader`.
 - **Processing**: aggregation by class, tests (ANOVA/Kruskal, Tukey/Dunn), Moran's I, biomass quantile classification for Sankey.
 - **Visualization**: plotters by type (violin, bar, box, stacked bar, Sankey) via factory or dedicated module.
@@ -90,34 +91,31 @@ pip install -r requirements-moran.txt
 
 ### Configuration
 
-Edit only the **CONFIGURATION** section at the top of **`main.py`**:
+Edit only the **CONFIGURAÇÃO** section at the top of **`main.py`** (in Portuguese):
 
-- **PATHS**: class raster path, biomass raster path, cities shapefile path, municipality name field, output directory (`outdir`).
-- **CITIES_FILTER**: `None` for all cities, or a list of names, e.g. `["Lavras", "Varginha"]`.
-- **RUN_VIOLIN** / **RUN_SANKEY** / **RUN_MORAN**: enable or disable violin, Sankey, and Moran analyses (order: violin → Sankey → Moran).
-- **PLOT_TYPES**: plot types (e.g. `["violin"]`, `["bar"]`, `["box"]`).
-- **EXCLUDE_CLASSES_VIOLIN**: classes to exclude from violin plots (e.g. `[0]` for Water).
-- **Sankey**: `SANKEY_PER_CITY` (True = one Sankey per city; False = one combined), `SANKEY_N_QUANTILES` (e.g. 3 → Low/Medium/High), `SANKEY_USE_PERCENT` (thickness = % or count of pixels).
-- **Moran**: `MORAN_NATIVE_RESOLUTION` (True = biomass native resolution; False = resampled 10 m), `MORAN_PERMUTATIONS`, `MORAN_SAVE_SCATTER`.
-- **CLASS_MAP**: class id → label (e.g. `{0: "Water", 1: "Urban", ...}`).
+- **Arquivos**: `ARQUIVO_USO_SOLO`, `ARQUIVO_BIOMASSA`, `ARQUIVO_CIDADES`, `COLUNA_NOME_CIDADE`, `PASTA_SAIDA`.
+- **Cidades**: `CIDADES = []` for all municipalities, or e.g. `["Lavras", "Varginha"]`.
+- **Predefinição**: `PRESET = "rapido" | "artigo" | "completo"` (optional; overrides individual flags).
+- **Análises**: `GERAR_GRAFICO_BIOMASSA_POR_USO`, `GERAR_DIAGRAMA_FLUXO`, `GERAR_BARRAS_USO_SOLO`, `GERAR_INDICE_SHANNON`, `GERAR_AUTOCORRELACAO_MORAN`.
+- **Gráfico de biomassa**: `TIPOS_GRAFICO_BIOMASSA` (`["violin"]`, `["bar"]`, or `["box"]`).
+- **Exclusões**: use class **names** from `MAPA_CLASSES`, e.g. `EXCLUIR_DO_GRAFICO_BIOMASSA = ["NULL", "Água"]`.
+- **Sankey**: `SANKEY_UM_POR_CIDADE`, `SANKEY_NUMERO_CLASSES_BIOMASSA`, `SANKEY_USAR_PORCENTAGEM`.
+- **Moran**: `MORAN_RESOLUCAO_NATIVA`, `MORAN_SALVAR_GRAFICO_DISPERSAO`.
+- **MAPA_CLASSES**: raster code → label (e.g. `{0: "NULL", 1: "Água", ...}`).
 
 The **classification (Sentinel) raster** must be in a **projected CRS (meters)**; MODIS and shapefile are reprojected to the class raster CRS when needed.
 
 ### Running
 
-**Full analysis** (violin and/or Moran according to flags):
+**All analyses** (according to flags or preset in `main.py`):
 
 ```bash
 python main.py
 ```
 
-**Moran's I only** (uses default config in `src.run_moran`):
+**Moran's I**: prefer `GERAR_AUTOCORRELACAO_MORAN = True` in **`main.py`**. For developers only, `python -m src.run_moran` remains available with its own defaults.
 
-```bash
-python -m src.run_moran
-```
-
-**Reproject rasters only**:
+**Reproject rasters only** (developers):
 
 ```bash
 python -m src.reproject_raster
@@ -125,7 +123,7 @@ python -m src.reproject_raster
 
 ### Outputs
 
-All outputs go to **PATHS["outdir"]** (default: `./dados_gerados`).
+All outputs go to **`PASTA_SAIDA`** (default: `./dados_gerados`).
 
 | Output | Description |
 |--------|-------------|
@@ -169,7 +167,7 @@ If the class raster is not projected, the script may fail.
 |---------|---------------|----------|
 | `ValueError: geometries do not overlap` | Polygon outside raster extent | Check CRS and data extent. |
 | Empty CSVs | Class with no valid pixels | Check `nodata` and raster masks. |
-| Empty or missing plots | Missing data or flags off | Check paths and `RUN_VIOLIN` / plot options. |
+| Empty or missing plots | Missing data or flags off | Check paths and `GERAR_*` flags or `PRESET` in `main.py`. |
 | `ImportError` (rasterio/geopandas) | GDAL/Fiona missing | Install via conda-forge or system packages. |
 | p-value NaN | Too few points per group (< 10) | Increase area or `MIN_N_FOR_TESTS` in config. |
 

@@ -1,61 +1,78 @@
 """
-Ponto único de entrada: configure aqui arquivos, cidades e tipos de gráfico.
+Ponto único de entrada do projeto.
 
-Uso: python main.py
+Como usar:
+  1. Instale as dependências (veja README.md)
+  2. Edite apenas a seção CONFIGURAÇÃO abaixo
+  3. Execute no terminal: python main.py
 """
 
-import os
-from typing import List, Optional
-
-from src import AnalysisConfig, AnalysisPipeline, run_moran_analysis
-from src.config import PathsConfig, MoranConfig, SankeyConfig
-from src.utils.constants import NULL_LULC_CLASS, WATER_LULC_CLASS
+from src.user_runner import ConfiguracaoUsuario, executar_analises
 
 
 # =============================================================================
 # CONFIGURAÇÃO — edite apenas esta seção
 # =============================================================================
 
-# ---- Arquivos ----
-PATHS = {
-    "class_raster": "classificacao/LULC_7Cidades_10m_20250710_20250730_projected.tif",
-    "biomass_raster": "metricas/Biomass_sete_cidades_projected.tif",
-    "vector_cities": "shapefile/sete_cidades.shp",
-    "city_field": "NM_MUN",
-    "outdir": "./dados_gerados",
-}
+# ---- Passo 1: onde estão seus arquivos? ----
+ARQUIVO_USO_SOLO = "classificacao/LULC_7Cidades_10m_20250710_20250730_projected.tif"
+ARQUIVO_BIOMASSA = "metricas/Biomass_sete_cidades_projected.tif"
+ARQUIVO_CIDADES = "shapefile/sete_cidades.shp"
+COLUNA_NOME_CIDADE = "NM_MUN"   # coluna do shapefile com o nome da cidade
+PASTA_SAIDA = "./dados_gerados"  # pasta onde os resultados serão salvos
 
-# ---- Cidades (None = todas) ----
-CITIES_FILTER: Optional[List[str]] = None
-# Exemplos: None  |  ["Lavras"]  |  ["Lavras", "Varginha", "Alfenas"]
+# ---- Passo 2: quais cidades analisar? ----
+# Lista vazia [] = todas as cidades do shapefile
+CIDADES = []
+# Exemplos:
+# CIDADES = ["Lavras"]
+# CIDADES = ["Lavras", "Varginha", "Alfenas"]
 
-# ---- O que rodar ----
-RUN_VIOLIN = False  # Gráfico de violino (biomassa por classe de uso, cidades combinadas)
-RUN_SANKEY = False   # Sankey: uso do solo → classe de biomassa (quantis); um por cidade ou geral
-RUN_MORAN = False   # Moran's I + scatter por cidade (resolução nativa da biomassa)
-RUN_STACKED_LULC = False  # Barras empilhadas: cobertura (%) por classe de uso do solo, por cidade
-RUN_SHANNON = False  # Shannon (H') e equitabilidade de Pielou (J') sobre proporções LULC por cidade
+# ---- Passo 3: predefinição rápida (opcional) ----
+# Descomente UMA linha abaixo, ou deixe PRESET = None para usar GERAR_* manualmente
+PRESET = None
+# PRESET = "rapido"     # só barras de cobertura do solo
+# PRESET = "artigo"     # gráfico de biomassa + diagrama de fluxo
+# PRESET = "completo"   # todas as análises
 
-# ---- Opções do gráfico de violino ----
-PLOT_TYPES = ["violin"]   # Opções: "violin" | "bar" | "box"
-# NULL (0) e Água (1) não entram em violino/Sankey
-EXCLUDE_NULL_LULC = [NULL_LULC_CLASS]
-EXCLUDE_CLASSES_VIOLIN = [NULL_LULC_CLASS, WATER_LULC_CLASS]
-# Shannon: NULL (0) é sempre excluído no cálculo; adicione aqui outras classes se quiser (ex.: água)
-EXCLUDE_CLASSES_SHANNON: List[int] = []
+# ---- Passo 4: o que gerar? (True = sim, False = não) ----
+# Ignorado se PRESET estiver definido acima.
 
-# ---- Opções do Sankey (se RUN_SANKEY = True) ----
-SANKEY_PER_CITY = True   # True = um Sankey por cidade; False = um Sankey geral (todas as cidades)
-SANKEY_N_QUANTILES = 3   # Classes de biomassa por quantis (ex.: 3 = Low, Medium, High)
-SANKEY_USE_PERCENT = True   # True = espessura = % de pixels; False = nº de pixels
+GERAR_GRAFICO_BIOMASSA_POR_USO = False
+# Saída: dados_gerados/*_violin.png e all_cities_*_violin_combined.png
 
-# ---- Opções do Moran (se RUN_MORAN = True) ----
-MORAN_NATIVE_RESOLUTION = True   # True = resolução nativa; False = reamostrado 10 m
-MORAN_PERMUTATIONS = 999
-MORAN_SAVE_SCATTER = True
+GERAR_DIAGRAMA_FLUXO = False
+# Saída: dados_gerados/sankey/sankey_<Cidade>.html (ou sankey_all_cities.html)
 
-# ---- Nomes das classes (LULC): 0 = NULL; cobertura válida 1–5 ----
-CLASS_MAP = {
+GERAR_BARRAS_USO_SOLO = False
+# Saída: dados_gerados/stacked_bar_land_use_percentage.png e CSVs de estatísticas
+
+GERAR_INDICE_SHANNON = False
+# Saída: CSVs com índice de Shannon (H') e equitabilidade de Pielou (J')
+
+GERAR_AUTOCORRELACAO_MORAN = False
+# Saída: dados_gerados/moran/ (CSV e gráficos de dispersão, se habilitado)
+
+# ---- Opções do gráfico de biomassa (violin / bar / box) ----
+TIPOS_GRAFICO_BIOMASSA = ["violin"]  # opções: "violin", "bar", "box"
+
+# Classes a ignorar (use os nomes de MAPA_CLASSES, não números)
+EXCLUIR_DO_GRAFICO_BIOMASSA = ["NULL", "Água"]
+EXCLUIR_DO_DIAGRAMA_FLUXO = ["NULL", "Água"]
+EXCLUIR_DAS_BARRAS_USO_SOLO = ["NULL"]
+EXCLUIR_DO_INDICE_SHANNON = []  # NULL é sempre excluído automaticamente
+
+# ---- Opções do diagrama de fluxo (Sankey) ----
+SANKEY_UM_POR_CIDADE = True       # True = um diagrama por cidade; False = um geral
+SANKEY_NUMERO_CLASSES_BIOMASSA = 3  # ex.: 3 = Baixa, Média, Alta
+SANKEY_USAR_PORCENTAGEM = True    # True = espessura em %; False = número de pixels
+
+# ---- Opções da autocorrelação Moran ----
+MORAN_RESOLUCAO_NATIVA = True     # True = resolução original da biomassa; False = 10 m
+MORAN_SALVAR_GRAFICO_DISPERSAO = True
+
+# ---- Nomes das classes de uso do solo (código no raster → nome legível) ----
+MAPA_CLASSES = {
     0: "NULL",
     1: "Água",
     2: "Urbano",
@@ -65,165 +82,37 @@ CLASS_MAP = {
 }
 
 # =============================================================================
-
-
-def _paths_config() -> PathsConfig:
-    return PathsConfig(
-        class_raster_path=PATHS["class_raster"],
-        biomass_raster_path=PATHS["biomass_raster"],
-        vector_cities_path=PATHS["vector_cities"],
-        city_field=PATHS["city_field"],
-        outdir=PATHS["outdir"],
-    )
-
-
-def _validate_paths(paths: PathsConfig, need_class: bool) -> bool:
-    required = [paths.biomass_raster_path, paths.vector_cities_path]
-    if need_class:
-        required.append(paths.class_raster_path)
-    for p in required:
-        if not os.path.exists(p):
-            print(f"[ERRO] Arquivo não encontrado: {p}")
-            return False
-    return True
+# Não é necessário editar abaixo desta linha
+# =============================================================================
 
 
 def main() -> None:
-    paths = _paths_config()
-
-    if RUN_VIOLIN:
-        if not _validate_paths(paths, need_class=True):
-            return
-        config = AnalysisConfig(
-            resample_metrics="nearest",
-            make_plots=True,
-            outdir=paths.outdir,
-            plot_types=PLOT_TYPES,
-            make_stacked_bar_charts=False,
-            save_csv_files=False,
-            run_inferential_tests=False,
-            exclude_classes=EXCLUDE_CLASSES_VIOLIN,
-            sample_per_class=5000,
-            min_n_for_tests=10,
-            alpha=0.05,
-            rng_seed=42,
-        )
-        pipeline = AnalysisPipeline(config)
-        pipeline.run_violin_plots_analysis(
-            class_raster_path=paths.class_raster_path,
-            biomass_raster_path=paths.biomass_raster_path,
-            vector_cities_path=paths.vector_cities_path,
-            city_field=paths.city_field,
-            class_map=CLASS_MAP,
-            cities_filter=CITIES_FILTER,
-        )
-        print("[OK] Violino concluído.")
-
-    if RUN_SANKEY:
-        if not _validate_paths(paths, need_class=True):
-            return
-        sankey_cfg = SankeyConfig(
-            per_city=SANKEY_PER_CITY,
-            n_quantiles=SANKEY_N_QUANTILES,
-            use_percentage=SANKEY_USE_PERCENT,
-        )
-        config = AnalysisConfig(
-            resample_metrics="nearest",
-            make_plots=True,
-            outdir=paths.outdir,
-            plot_types=PLOT_TYPES,
-            make_stacked_bar_charts=False,
-            save_csv_files=False,
-            run_inferential_tests=False,
-            exclude_classes=EXCLUDE_CLASSES_VIOLIN,
-            sample_per_class=5000,
-            min_n_for_tests=10,
-            alpha=0.05,
-            rng_seed=42,
-        )
-        pipeline = AnalysisPipeline(config)
-        pipeline.run_sankey_analysis(
-            class_raster_path=paths.class_raster_path,
-            biomass_raster_path=paths.biomass_raster_path,
-            vector_cities_path=paths.vector_cities_path,
-            city_field=paths.city_field,
-            class_map=CLASS_MAP,
-            cities_filter=CITIES_FILTER,
-            sankey_config=sankey_cfg,
-        )
-        print("[OK] Sankey concluído.")
-
-    if RUN_STACKED_LULC:
-        if not _validate_paths(paths, need_class=True):
-            return
-        config = AnalysisConfig(
-            resample_metrics="nearest",
-            make_plots=False,
-            outdir=paths.outdir,
-            make_stacked_bar_charts=True,
-            save_csv_files=True,
-            run_inferential_tests=False,
-            exclude_classes=EXCLUDE_NULL_LULC,
-            sample_per_class=5000,
-            min_n_for_tests=10,
-            alpha=0.05,
-            rng_seed=42,
-        )
-        pipeline = AnalysisPipeline(config)
-        pipeline.run(
-            class_raster_path=paths.class_raster_path,
-            metrics_rasters=None,
-            vector_cities_path=paths.vector_cities_path,
-            city_field=paths.city_field,
-            class_map=CLASS_MAP,
-            cities_filter=CITIES_FILTER,
-        )
-        out_png = os.path.join(paths.outdir, "stacked_bar_land_use_percentage.png")
-        print(f"[OK] Gráfico LULC empilhado: {out_png}")
-
-    if RUN_SHANNON:
-        if not _validate_paths(paths, need_class=True):
-            return
-        config = AnalysisConfig(
-            resample_metrics="nearest",
-            make_plots=False,
-            outdir=paths.outdir,
-            make_stacked_bar_charts=False,
-            save_csv_files=True,
-            run_inferential_tests=False,
-            exclude_classes=EXCLUDE_CLASSES_SHANNON,
-            sample_per_class=5000,
-            min_n_for_tests=10,
-            alpha=0.05,
-            rng_seed=42,
-        )
-        pipeline = AnalysisPipeline(config)
-        pipeline.run_shannon_index_analysis(
-            class_raster_path=paths.class_raster_path,
-            vector_cities_path=paths.vector_cities_path,
-            city_field=paths.city_field,
-            cities_filter=CITIES_FILTER,
-        )
-        print("[OK] Shannon / equitabilidade concluído.")
-
-    if RUN_MORAN:
-        if not _validate_paths(paths, need_class=not MORAN_NATIVE_RESOLUTION):
-            return
-        moran_cfg = MoranConfig(
-            use_native_resolution=MORAN_NATIVE_RESOLUTION,
-            cities_filter=CITIES_FILTER,
-            permutations=MORAN_PERMUTATIONS,
-            contiguity="rook",
-            save_scatter_plots=MORAN_SAVE_SCATTER,
-        )
-        print(f"Moran's I — {moran_cfg.permutations} permutações\n")
-        df = run_moran_analysis(paths, moran_cfg)
-        if not df.empty:
-            moran_dir = os.path.join(paths.outdir, "moran")
-            csv_name = "moran_global_por_cidade_nativo.csv" if moran_cfg.use_native_resolution else "moran_global_por_cidade.csv"
-            print(f"\n{os.path.join(moran_dir, csv_name)}")
-            print(df.to_string(index=False))
-        print("[OK] Moran concluído.")
+    cfg = ConfiguracaoUsuario(
+        arquivo_uso_solo=ARQUIVO_USO_SOLO,
+        arquivo_biomassa=ARQUIVO_BIOMASSA,
+        arquivo_cidades=ARQUIVO_CIDADES,
+        coluna_nome_cidade=COLUNA_NOME_CIDADE,
+        pasta_saida=PASTA_SAIDA,
+        cidades=CIDADES,
+        preset=PRESET,
+        gerar_grafico_biomassa=GERAR_GRAFICO_BIOMASSA_POR_USO,
+        gerar_diagrama_fluxo=GERAR_DIAGRAMA_FLUXO,
+        gerar_barras_uso_solo=GERAR_BARRAS_USO_SOLO,
+        gerar_indice_shannon=GERAR_INDICE_SHANNON,
+        gerar_autocorrelacao_moran=GERAR_AUTOCORRELACAO_MORAN,
+        tipos_grafico_biomassa=TIPOS_GRAFICO_BIOMASSA,
+        excluir_do_grafico_biomassa=EXCLUIR_DO_GRAFICO_BIOMASSA,
+        excluir_do_diagrama_fluxo=EXCLUIR_DO_DIAGRAMA_FLUXO,
+        excluir_das_barras_uso_solo=EXCLUIR_DAS_BARRAS_USO_SOLO,
+        excluir_do_indice_shannon=EXCLUIR_DO_INDICE_SHANNON,
+        sankey_um_por_cidade=SANKEY_UM_POR_CIDADE,
+        sankey_numero_classes_biomassa=SANKEY_NUMERO_CLASSES_BIOMASSA,
+        sankey_usar_porcentagem=SANKEY_USAR_PORCENTAGEM,
+        moran_resolucao_nativa=MORAN_RESOLUCAO_NATIVA,
+        moran_salvar_grafico_dispersao=MORAN_SALVAR_GRAFICO_DISPERSAO,
+        mapa_classes=MAPA_CLASSES,
+    )
+    executar_analises(cfg)
 
 
 if __name__ == "__main__":

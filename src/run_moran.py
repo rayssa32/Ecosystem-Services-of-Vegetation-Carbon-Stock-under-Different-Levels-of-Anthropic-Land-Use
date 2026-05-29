@@ -1,5 +1,7 @@
 """
-Moran's I global por cidade.
+Moran's I global por cidade (uso avançado / desenvolvedores).
+
+Para usuários finais, prefira GERAR_AUTOCORRELACAO_MORAN = True no main.py.
 
 Modos: use_native_resolution=True (resolução nativa) ou False (10 m).
 Uso: python -m src.run_moran

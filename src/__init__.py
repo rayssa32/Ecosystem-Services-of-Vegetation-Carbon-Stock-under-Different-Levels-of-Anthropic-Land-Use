@@ -11,6 +11,7 @@ from .config import (
     DEFAULT_SANKEY_CONFIG,
 )
 from .pipeline import AnalysisPipeline, run_moran_analysis
+from .user_runner import ConfiguracaoUsuario, executar_analises
 
 __all__ = [
     "AnalysisConfig",
@@ -23,4 +24,6 @@ __all__ = [
     "DEFAULT_SANKEY_CONFIG",
     "AnalysisPipeline",
     "run_moran_analysis",
+    "ConfiguracaoUsuario",
+    "executar_analises",
 ]
