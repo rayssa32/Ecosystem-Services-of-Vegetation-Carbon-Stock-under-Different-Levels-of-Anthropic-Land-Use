@@ -17,3 +17,29 @@ CLASS_COLORS = {
 
 # Default fallback colors if class code not in CLASS_COLORS (order: 1 → 5)
 DEFAULT_CLASS_COLORS = ["#3b83bd", "#8c8c8c", "#c8a165", "#2ca25f", "#a1d99b"]
+
+# Rótulos em português para métricas e tipos de valor exibidos nos gráficos
+METRIC_LABELS = {
+    "Biomass": "Biomassa",
+    "GPP": "PPG",
+    "NPP": "PPN",
+    "Area": "Área",
+}
+
+VALUE_TYPE_LABELS = {
+    "mean": "média",
+    "sum": "soma",
+    "count": "contagem",
+    "total_kg": "total (kg)",
+    "percentage": "porcentagem",
+}
+
+
+def rotulo_metrica(nome: str) -> str:
+    """Retorna o rótulo em português de uma métrica (ex.: Biomass → Biomassa)."""
+    return METRIC_LABELS.get(nome, nome)
+
+
+def rotulo_tipo_valor(tipo: str) -> str:
+    """Retorna o rótulo em português de um tipo de valor (ex.: mean → média)."""
+    return VALUE_TYPE_LABELS.get(tipo, tipo)

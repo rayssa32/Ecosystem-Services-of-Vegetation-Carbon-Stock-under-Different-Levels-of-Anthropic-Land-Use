@@ -59,7 +59,7 @@ def classify_by_quantiles(
 
 
 def default_biomass_labels(n_quantiles: int) -> List[str]:
-    """Default labels for biomass quantile classes (e.g. Low, Medium, High)."""
+    """Rótulos padrão em português para classes de biomassa por quantis."""
     if n_quantiles <= 3:
-        return ["Low", "Medium", "High"][:n_quantiles]
-    return [f"Q{i+1}" for i in range(n_quantiles)]
+        return ["Baixa", "Média", "Alta"][:n_quantiles]
+    return [f"Q{i + 1}" for i in range(n_quantiles)]

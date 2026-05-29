@@ -9,7 +9,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from ..config import AnalysisConfig
-from ..utils.constants import CLASS_COLORS, DEFAULT_CLASS_COLORS, NULL_LULC_CLASS
+from ..utils.constants import (
+    CLASS_COLORS,
+    DEFAULT_CLASS_COLORS,
+    NULL_LULC_CLASS,
+    rotulo_metrica,
+    rotulo_tipo_valor,
+)
 
 
 class BasePlotter(ABC):
@@ -92,8 +98,13 @@ class BarPlotter(BasePlotter):
         )
         ax.set_xticks(x)
         ax.set_xticklabels(labels, rotation=45, ha="right")
-        ax.set_title(f"{city}: Média de {metric} por classe", fontsize=14, fontweight="bold")
-        ax.set_ylabel(metric, fontsize=12)
+        metric_label = rotulo_metrica(metric)
+        ax.set_title(
+            f"{city}: média de {metric_label} por classe de uso do solo",
+            fontsize=14,
+            fontweight="bold",
+        )
+        ax.set_ylabel(metric_label, fontsize=12)
         ax.grid(axis="y", alpha=0.3, linestyle="--")
 
         # Add statistical annotation if provided
@@ -123,7 +134,7 @@ class BarPlotter(BasePlotter):
         p_txt = (
             "p < 0.001"
             if isinstance(p, float) and p < 0.001
-            else (f"p = {p:.3f}" if isinstance(p, float) else "p = n/a")
+            else (f"p = {p:.3f}" if isinstance(p, float) else "p = n/d")
         )
 
         # Format effect size
@@ -131,7 +142,7 @@ class BarPlotter(BasePlotter):
         eff_txt = (
             f"{eff_sym} = {eff:.2f}"
             if isinstance(eff, float) and not np.isnan(eff)
-            else f"{eff_sym} = n/a"
+            else f"{eff_sym} = n/d"
         )
 
         # Add significance indicator
@@ -267,10 +278,11 @@ class ViolinPlotter(BasePlotter):
         # Configure axes
         ax.set_xticks(positions)
         ax.set_xticklabels(labels, rotation=45, ha="right")
-        ax.set_xlabel("Land Use Class", fontsize=12, fontweight="bold")
-        ax.set_ylabel(f"{metric}", fontsize=12, fontweight="bold")
+        metric_label = rotulo_metrica(metric)
+        ax.set_xlabel("Classe de uso do solo", fontsize=12, fontweight="bold")
+        ax.set_ylabel(metric_label, fontsize=12, fontweight="bold")
         ax.set_title(
-            f"{city}: {metric} Distribution by Land Use Class",
+            f"{city}: distribuição de {metric_label} por classe de uso do solo",
             fontsize=14,
             fontweight="bold",
             pad=20,
@@ -352,8 +364,14 @@ class ViolinPlotter(BasePlotter):
             )
 
             if not data_by_class:
-                ax.text(0.5, 0.5, f"No data for {city}", 
-                       ha="center", va="center", transform=ax.transAxes)
+                ax.text(
+                    0.5,
+                    0.5,
+                    f"Sem dados para {city}",
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
+                )
                 ax.set_title(city, fontsize=12, fontweight="bold")
                 ax.set_xticks([])
                 ax.set_yticks([])
@@ -376,7 +394,7 @@ class ViolinPlotter(BasePlotter):
             ax.set_xticks(positions)
             ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=9)
             if idx % n_cols == 0:  # Leftmost column
-                ax.set_ylabel(f"{metric}", fontsize=11, fontweight="bold")
+                ax.set_ylabel(rotulo_metrica(metric), fontsize=11, fontweight="bold")
             ax.set_title(city, fontsize=12, fontweight="bold", pad=10)
             ax.grid(axis="y", alpha=0.3, linestyle="--")
             ax.set_axisbelow(True)
@@ -391,7 +409,7 @@ class ViolinPlotter(BasePlotter):
 
         # Add overall title
         fig.suptitle(
-            f"{metric} Distribution by Land Use Class - All Cities",
+            f"Distribuição de {rotulo_metrica(metric)} por classe de uso do solo — todas as cidades",
             fontsize=16,
             fontweight="bold",
             y=0.995,
@@ -514,14 +532,14 @@ class ViolinPlotter(BasePlotter):
         p_txt = (
             "p < 0.001"
             if isinstance(p, float) and p < 0.001
-            else (f"p = {p:.3f}" if isinstance(p, float) else "p = n/a")
+            else (f"p = {p:.3f}" if isinstance(p, float) else "p = n/d")
         )
 
         # Format effect size (epsilon squared)
         eff_txt = (
             f"ε² = {eff:.3f}"
             if isinstance(eff, float) and not np.isnan(eff)
-            else "ε² = n/a"
+            else "ε² = n/d"
         )
 
         # Add significance indicator
@@ -771,20 +789,25 @@ class StackedBarPlotter:
         """
         # Set y-axis label
         if value_type == "percentage":
-            ylabel = "Area Coverage (%)"
+            ylabel = "Cobertura de área (%)"
         else:
-            ylabel = f"{metric} ({value_type})"
+            metric_label = rotulo_metrica(metric)
+            tipo_label = rotulo_tipo_valor(value_type)
+            ylabel = f"{metric_label} ({tipo_label})"
             if normalize:
-                ylabel = f"{metric} ({value_type}) - Percentage (%)"
+                ylabel = f"{metric_label} ({tipo_label}) — porcentagem (%)"
 
-        ax.set_xlabel("City", fontsize=12, fontweight="bold")
+        ax.set_xlabel("Cidade", fontsize=12, fontweight="bold")
         ax.set_ylabel(ylabel, fontsize=12, fontweight="bold")
 
         # Set title
         if value_type == "percentage":
-            title = "Land Use Class Coverage (%) by City"
+            title = "Cobertura das classes de uso do solo (%) por cidade"
         else:
-            title = f"Stacked Bar Chart: {metric} by City and Land Use Class"
+            title = (
+                f"Barras empilhadas: {rotulo_metrica(metric)} por cidade "
+                f"e classe de uso do solo"
+            )
 
         ax.set_title(title, fontsize=14, fontweight="bold", pad=20)
 
@@ -802,7 +825,7 @@ class StackedBarPlotter:
             ax: Matplotlib axes object
         """
         ax.legend(
-            title="Land Use Class",
+            title="Classe de uso do solo",
             bbox_to_anchor=(1.05, 1),
             loc="upper left",
             frameon=True,

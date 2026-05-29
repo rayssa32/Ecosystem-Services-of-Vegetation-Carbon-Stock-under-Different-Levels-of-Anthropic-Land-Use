@@ -123,7 +123,7 @@ def moran_global(
 
 def moran_scatter_plot(
     moran: Moran,
-    title: str = "Moran scatter plot",
+    title: str = "Diagrama de dispersão de Moran",
     xlabel: str = "Biomassa (padronizada)",
     ylabel: str = "Lag espacial (W·z)",
     save_path: Optional[str] = None,

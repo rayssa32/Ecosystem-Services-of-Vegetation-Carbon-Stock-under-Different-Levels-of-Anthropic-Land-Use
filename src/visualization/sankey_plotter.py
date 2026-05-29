@@ -72,10 +72,10 @@ def build_flow_df(
 def plot_sankey(
     flow_df: pd.DataFrame,
     outpath: str,
-    title: str = "Land use → Biomass class",
-    left_title: str = "Land use",
-    right_title: str = "Biomass class",
-    value_label: str = "% pixels",
+    title: str = "Uso do solo → classe de biomassa",
+    left_title: str = "Uso do solo",
+    right_title: str = "Classe de biomassa",
+    value_label: str = "% de pixels",
     width: int = 900,
     height: int = 500,
 ) -> None:

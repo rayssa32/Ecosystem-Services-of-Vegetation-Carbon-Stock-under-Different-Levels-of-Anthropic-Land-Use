@@ -359,7 +359,7 @@ class AnalysisPipeline:
                 if isinstance(violin_plotter, ViolinPlotter):
                     violin_plotter.plot_combined_cities(
                         city_data_list,
-                        "Biomass",
+                        "Biomassa",
                         class_map,
                         self.config.outdir,
                     )
@@ -468,12 +468,12 @@ class AnalysisPipeline:
             )
             if flow_df.empty:
                 return
-            value_label = "% pixels" if sankey_config.use_percentage else "pixels"
+            value_label = "% de pixels" if sankey_config.use_percentage else "pixels"
             outpath = os.path.join(sankey_dir, base_name)
             plot_sankey(
                 flow_df,
                 outpath,
-                title=f"Land use → Biomass class{f' — {city_label}' if city_label else ''}",
+                title=f"Uso do solo → classe de biomassa{f' — {city_label}' if city_label else ''}",
                 value_label=value_label,
             )
             print(f"[OK] Sankey saved: {outpath}.html")
