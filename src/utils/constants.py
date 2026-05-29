@@ -18,6 +18,15 @@ CLASS_COLORS = {
 # Default fallback colors if class code not in CLASS_COLORS (order: 1 → 5)
 DEFAULT_CLASS_COLORS = ["#3b83bd", "#8c8c8c", "#c8a165", "#2ca25f", "#a1d99b"]
 
+# Ordem da legenda (topo → base) no gráfico de cobertura do solo
+LULC_LEGEND_ORDER = [
+    "Água",
+    "Áreas de vegetação natural",
+    "Áreas urbanizadas",
+    "Solo exposto",
+    "Áreas antrópicas agrícolas",
+]
+
 # Rótulos em português para métricas e tipos de valor exibidos nos gráficos
 METRIC_LABELS = {
     "Biomass": "Biomassa",

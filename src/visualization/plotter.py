@@ -12,6 +12,7 @@ from ..config import AnalysisConfig
 from ..utils.constants import (
     CLASS_COLORS,
     DEFAULT_CLASS_COLORS,
+    LULC_LEGEND_ORDER,
     NULL_LULC_CLASS,
     rotulo_metrica,
     rotulo_tipo_valor,
@@ -610,14 +611,21 @@ class StackedBarPlotter:
         # Prepare data
         value_col, label_col = self._determine_columns(combined_df, metric, value_type)
         pivot_df = self._prepare_pivot_data(combined_df, value_col, label_col, normalize)
+        if value_type == "percentage":
+            pivot_df = self._reorder_lulc_columns(pivot_df)
 
         # Get colors for classes
-        colors = self._get_class_colors(pivot_df.columns, combined_df, label_col)
+        colors = self._get_class_colors(pivot_df.columns.tolist(), combined_df, label_col)
 
         # Create and configure plot
         fig, ax = self._create_plot(pivot_df, colors)
         self._configure_plot_axes(ax, metric, value_type, normalize)
-        self._add_legend(ax)
+        legend_order = (
+            [c for c in LULC_LEGEND_ORDER if c in pivot_df.columns]
+            if value_type == "percentage"
+            else None
+        )
+        self._add_legend(ax, legend_order)
 
         # Save plot
         self._save_plot(fig, outdir, metric, value_type, normalize)
@@ -714,6 +722,15 @@ class StackedBarPlotter:
             pivot_df = pivot_df.div(pivot_df.sum(axis=1), axis=0) * 100
 
         return pivot_df
+
+    def _reorder_lulc_columns(self, pivot_df: pd.DataFrame) -> pd.DataFrame:
+        """Reorder stack columns so the legend matches LULC_LEGEND_ORDER (top → bottom)."""
+        present = set(pivot_df.columns)
+        stack_order = [
+            cls for cls in reversed(LULC_LEGEND_ORDER) if cls in present
+        ]
+        extras = [c for c in pivot_df.columns if c not in stack_order]
+        return pivot_df[stack_order + extras]
 
     def _get_class_colors(
         self,
@@ -818,13 +835,24 @@ class StackedBarPlotter:
         ax.grid(axis="y", alpha=0.3, linestyle="--")
         ax.set_axisbelow(True)
 
-    def _add_legend(self, ax: plt.Axes) -> None:
+    def _add_legend(
+        self, ax: plt.Axes, class_order: Optional[List[str]] = None
+    ) -> None:
         """Add legend to the plot.
 
         Args:
             ax: Matplotlib axes object
+            class_order: Optional explicit legend order (top → bottom)
         """
+        handles, labels = ax.get_legend_handles_labels()
+        if class_order:
+            lookup = dict(zip(labels, handles))
+            handles = [lookup[label] for label in class_order if label in lookup]
+            labels = [label for label in class_order if label in lookup]
+
         ax.legend(
+            handles,
+            labels,
             title="Classe de uso do solo",
             bbox_to_anchor=(1.05, 1),
             loc="upper left",
