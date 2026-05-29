@@ -75,10 +75,10 @@ MORAN_SALVAR_GRAFICO_DISPERSAO = True
 MAPA_CLASSES = {
     0: "NULL",
     1: "Água",
-    2: "Urbano",
-    3: "Solo",
-    4: "Vegetação",
-    5: "Agro/Pasto",
+    2: "Áreas urbanizadas",
+    3: "Solo exposto",
+    4: "Áreas de vegetação natural",
+    5: "Áreas antrópicas agrícolas",
 }
 
 # =============================================================================
