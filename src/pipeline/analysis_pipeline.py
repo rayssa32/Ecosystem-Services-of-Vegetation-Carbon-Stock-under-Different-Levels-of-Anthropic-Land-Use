@@ -16,10 +16,15 @@ from ..processing.aggregator import DataAggregator
 from ..processing.biomass_classes import classify_by_quantiles, default_biomass_labels
 from ..processing.statistics import StatisticsAnalyzer
 from ..visualization.graphics_factory import GraphicsFactory
-from ..visualization.plotter import ViolinPlotter
+from ..visualization.plotter import BoxPlotter, ViolinPlotter
 from ..visualization.sankey_plotter import build_flow_df, plot_sankey
 from ..utils.raster_utils import pixel_area_from_transform
-from ..utils.constants import CLASS_COLORS, NULL_LULC_CLASS
+from ..utils.constants import (
+    CLASS_COLORS,
+    NULL_LULC_CLASS,
+    biomass_display_metric,
+    scale_biomass,
+)
 
 
 class AnalysisPipeline:
@@ -140,6 +145,10 @@ class AnalysisPipeline:
                             class_transform,
                             class_clip.shape,
                         )
+                        if metric_name == "Biomass":
+                            metr = scale_biomass(
+                                metr, self.config.biomass_carbon_fraction
+                            )
 
                         # Aggregate statistics
                         stats = self.aggregator.summarize_by_classes(metr, class_clip)
@@ -329,12 +338,15 @@ class AnalysisPipeline:
                     continue  # Skip cities outside raster bounds
 
                 # Clip and reproject biomass to match classification grid
-                biomass_clip = self.raster_loader.clip_metric_raster(
-                    src_biomass,
-                    src_class,
-                    geom,
-                    class_transform,
-                    class_clip.shape,
+                biomass_clip = scale_biomass(
+                    self.raster_loader.clip_metric_raster(
+                        src_biomass,
+                        src_class,
+                        geom,
+                        class_transform,
+                        class_clip.shape,
+                    ),
+                    self.config.biomass_carbon_fraction,
                 )
 
                 # Run Kruskal-Wallis test
@@ -352,19 +364,30 @@ class AnalysisPipeline:
 
                 print(f"[OK] Processed data for {city}")
 
-            # Generate combined violin plot with all cities
+            # Generate combined distribution plot for all cities
             if city_data_list:
-                plotter = self.graphics.create_plotter("violin")
-                violin_plotter = plotter.plotter
-                if isinstance(violin_plotter, ViolinPlotter):
-                    violin_plotter.plot_combined_cities(
-                        city_data_list,
-                        "Biomassa",
-                        class_map,
-                        self.config.outdir,
-                    )
-                else:
-                    print(f"[Warning] Expected ViolinPlotter, got {type(violin_plotter).__name__}")
+                plot_types = self.config.plot_types or ["violin"]
+                for plot_type in plot_types:
+                    if plot_type not in ("violin", "box"):
+                        print(
+                            f"[Warning] Plot type '{plot_type}' is not supported for "
+                            "biomass distribution plots. Skipping."
+                        )
+                        continue
+                    plotter = self.graphics.create_plotter(plot_type)
+                    distribution_plotter = plotter.plotter
+                    if isinstance(distribution_plotter, (ViolinPlotter, BoxPlotter)):
+                        distribution_plotter.plot_combined_cities(
+                            city_data_list,
+                            biomass_display_metric(self.config.biomass_carbon_fraction),
+                            class_map,
+                            self.config.outdir,
+                        )
+                    else:
+                        print(
+                            f"[Warning] Expected ViolinPlotter or BoxPlotter, "
+                            f"got {type(distribution_plotter).__name__}"
+                        )
             else:
                 print("[Warning] No valid city data collected. No plots generated.")
 
@@ -416,12 +439,15 @@ class AnalysisPipeline:
                     )
                 except ValueError:
                     continue
-                biomass_clip = self.raster_loader.clip_metric_raster(
-                    src_biomass,
-                    src_class,
-                    geom,
-                    class_transform,
-                    class_clip.shape,
+                biomass_clip = scale_biomass(
+                    self.raster_loader.clip_metric_raster(
+                        src_biomass,
+                        src_class,
+                        geom,
+                        class_transform,
+                        class_clip.shape,
+                    ),
+                    self.config.biomass_carbon_fraction,
                 )
                 valid = ~(np.isnan(class_clip) | np.isnan(biomass_clip))
                 if not np.any(valid):

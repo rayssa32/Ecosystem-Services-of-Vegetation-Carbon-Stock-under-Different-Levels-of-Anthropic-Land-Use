@@ -38,8 +38,8 @@ PRESET = None
 # ---- Passo 4: o que gerar? (True = sim, False = não) ----
 # Ignorado se PRESET estiver definido acima.
 
-GERAR_GRAFICO_BIOMASSA_POR_USO = False
-# Saída: dados_gerados/*_violin.png e all_cities_*_violin_combined.png
+GERAR_GRAFICO_BIOMASSA_POR_USO = True
+# Saída: dados_gerados/all_classes_Carbono_box_by_class.png (com fração ≠ 1)
 
 GERAR_DIAGRAMA_FLUXO = False
 # Saída: dados_gerados/sankey/sankey_<Cidade>.html (ou sankey_all_cities.html)
@@ -54,7 +54,9 @@ GERAR_AUTOCORRELACAO_MORAN = False
 # Saída: dados_gerados/moran/ (CSV e gráficos de dispersão, se habilitado)
 
 # ---- Opções do gráfico de biomassa (violin / bar / box) ----
-TIPOS_GRAFICO_BIOMASSA = ["violin"]  # opções: "violin", "bar", "box"
+TIPOS_GRAFICO_BIOMASSA = ["violin", "box"]  # opções: "violin", "bar", "box"
+# Biomassa × fração → estoque de carbono nos gráficos. Use 1.0 se ARQUIVO_BIOMASSA já for carbono.
+FRACAO_CARBONO_NA_BIOMASSA = 0.47
 
 # Classes a ignorar (use os nomes de MAPA_CLASSES, não números)
 EXCLUIR_DO_GRAFICO_BIOMASSA = ["NULL", "Água"]
@@ -101,6 +103,7 @@ def main() -> None:
         gerar_indice_shannon=GERAR_INDICE_SHANNON,
         gerar_autocorrelacao_moran=GERAR_AUTOCORRELACAO_MORAN,
         tipos_grafico_biomassa=TIPOS_GRAFICO_BIOMASSA,
+        fracao_carbono_biomassa=FRACAO_CARBONO_NA_BIOMASSA,
         excluir_do_grafico_biomassa=EXCLUIR_DO_GRAFICO_BIOMASSA,
         excluir_do_diagrama_fluxo=EXCLUIR_DO_DIAGRAMA_FLUXO,
         excluir_das_barras_uso_solo=EXCLUIR_DAS_BARRAS_USO_SOLO,

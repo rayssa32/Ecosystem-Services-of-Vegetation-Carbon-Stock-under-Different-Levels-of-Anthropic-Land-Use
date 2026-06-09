@@ -1,12 +1,15 @@
 """Base plotting interface and concrete implementations."""
 
 import os
+import re
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, List, Tuple
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
+from scipy.stats import kruskal
 
 from ..config import AnalysisConfig
 from ..utils.constants import (
@@ -130,6 +133,10 @@ class BarPlotter(BasePlotter):
         test_name = annotation.get("teste_global", "")
         p = annotation.get("p_global", np.nan)
         eff = annotation.get("efeito", np.nan)
+        if isinstance(p, np.generic):
+            p = float(p)
+        if isinstance(eff, np.generic):
+            eff = float(eff)
 
         # Format p-value
         p_txt = (
@@ -163,38 +170,10 @@ class BarPlotter(BasePlotter):
         )
 
 
-class BoxPlotter(BasePlotter):
-    """Generates box plots for comparing distributions across classes."""
-
-    def plot(
-        self,
-        df: pd.DataFrame,
-        metric: str,
-        city: str,
-        label_col: str,
-        outdir: str,
-        annotation: Optional[Dict] = None,
-    ) -> None:
-        """Generate box plot comparing distributions across classes.
-
-        Note: This requires raw data, not just summary statistics.
-        Currently a placeholder for future implementation.
-
-        Args:
-            df: DataFrame with data (should contain raw values)
-            metric: Name of the metric
-            city: City name
-            label_col: Column name for class labels
-            outdir: Output directory
-            annotation: Optional statistical test results
-        """
-        # TODO: Implement box plot using raw data arrays
-        # This requires passing raw data arrays to the plotter
-        pass
-
-
 class ViolinPlotter(BasePlotter):
     """Generates violin plots for comparing distributions across classes."""
+
+    _plot_extension = "violin"
 
     def __init__(self, config: AnalysisConfig):
         """Initialize violin plotter.
@@ -203,6 +182,15 @@ class ViolinPlotter(BasePlotter):
             config: Analysis configuration object
         """
         self.config = config
+
+    def _metric_axis_label(self, metric: str) -> str:
+        """Y-axis label; reflects biomass → carbon conversion when configured."""
+        fraction = getattr(self.config, "biomass_carbon_fraction", 1.0)
+        if metric == "Carbono":
+            return f"Carbono (biomassa × {fraction:g})" if fraction != 1.0 else "Carbono"
+        if metric in ("Biomassa", "Biomass") and fraction != 1.0:
+            return f"Carbono (biomassa × {fraction:g})"
+        return rotulo_metrica(metric)
 
     def plot(
         self,
@@ -260,27 +248,15 @@ class ViolinPlotter(BasePlotter):
             print(f"[Warning] No valid data for {city} - {metric}. Skipping plot.")
             return
 
-        # Create the plot
-        fig, ax = plt.subplots(figsize=(12, 8))
+        # Create the plot — one column for the city, classes overlaid in the same violin
+        fig, ax = plt.subplots(figsize=(8, 8))
 
-        # Create violin plot
-        positions = np.arange(len(labels))
-        parts = ax.violinplot(
-            [data_by_class[label] for label in labels],
-            positions=positions,
-            showmeans=True,
-            showmedians=True,
-            widths=0.7,
-        )
+        self._plot_stacked_distributions(ax, data_by_class, labels, class_map, position=0)
 
-        # Customize violin plot colors
-        self._style_violin_plot(parts, labels, class_map)
-
-        # Configure axes
-        ax.set_xticks(positions)
-        ax.set_xticklabels(labels, rotation=45, ha="right")
-        metric_label = rotulo_metrica(metric)
-        ax.set_xlabel("Classe de uso do solo", fontsize=12, fontweight="bold")
+        metric_label = self._metric_axis_label(metric)
+        ax.set_xticks([0])
+        ax.set_xticklabels([city], rotation=45, ha="right")
+        ax.set_xlabel("Cidade", fontsize=12, fontweight="bold")
         ax.set_ylabel(metric_label, fontsize=12, fontweight="bold")
         ax.set_title(
             f"{city}: distribuição de {metric_label} por classe de uso do solo",
@@ -288,6 +264,7 @@ class ViolinPlotter(BasePlotter):
             fontweight="bold",
             pad=20,
         )
+        self._add_class_legend(ax, labels, class_map)
 
         # Add statistical annotation
         if annotation is not None:
@@ -300,7 +277,7 @@ class ViolinPlotter(BasePlotter):
         # Adjust layout and save
         plt.tight_layout()
         os.makedirs(outdir, exist_ok=True)
-        filename = f"{city}_{metric}_violin.png"
+        filename = f"{city}_{metric}_{self._plot_extension}.png"
         plt.savefig(os.path.join(outdir, filename), dpi=200, bbox_inches="tight")
         plt.close()
 
@@ -311,7 +288,7 @@ class ViolinPlotter(BasePlotter):
         class_map: Optional[Dict[int, str]],
         outdir: str,
     ) -> None:
-        """Generate a combined violin plot with all cities in a single image.
+        """Generate one distribution plot per land-use class, comparing all cities.
 
         Args:
             city_data_list: List of dictionaries, each containing:
@@ -327,102 +304,161 @@ class ViolinPlotter(BasePlotter):
             print("[Warning] No city data provided for combined plot. Skipping.")
             return
 
-        # Determine grid layout
-        n_cities = len(city_data_list)
-        n_cols = min(3, n_cities)  # Max 3 columns
-        n_rows = (n_cities + n_cols - 1) // n_cols  # Ceiling division
+        class_city_data: Dict[str, List[Tuple[str, np.ndarray]]] = {}
+        all_labels: List[str] = []
 
-        # Create figure with subplots
-        fig, axes = plt.subplots(
-            n_rows, n_cols, figsize=(6 * n_cols, 5 * n_rows), sharey=True
-        )
-        
-        # Handle single subplot case
-        if n_cities == 1:
-            axes = [axes]
-        elif n_rows == 1:
-            axes = axes if isinstance(axes, np.ndarray) else [axes]
-        else:
-            axes = axes.flatten()
-
-        # Get all class labels from first city (assumes consistent class sets)
-        first_data = self._prepare_data_for_plotting(
-            city_data_list[0]["values"], city_data_list[0]["classes"], class_map
-        )
-        all_labels = first_data[1]
-
-        # Plot each city
-        for idx, city_data in enumerate(city_data_list):
-            ax = axes[idx]
+        for city_data in city_data_list:
             city = city_data["city"]
-            values = city_data["values"]
-            classes = city_data["classes"]
-            annotation = city_data.get("annotation")
-
-            # Prepare data for this city
             data_by_class, labels = self._prepare_data_for_plotting(
-                values, classes, class_map
+                city_data["values"], city_data["classes"], class_map
             )
-
-            if not data_by_class:
-                ax.text(
-                    0.5,
-                    0.5,
-                    f"Sem dados para {city}",
-                    ha="center",
-                    va="center",
-                    transform=ax.transAxes,
+            all_labels = self._merge_class_labels(all_labels, labels)
+            for label in labels:
+                class_city_data.setdefault(label, []).append(
+                    (city, data_by_class[label])
                 )
-                ax.set_title(city, fontsize=12, fontweight="bold")
-                ax.set_xticks([])
-                ax.set_yticks([])
-                continue
 
-            # Create violin plot
-            positions = np.arange(len(labels))
-            parts = ax.violinplot(
-                [data_by_class[label] for label in labels],
-                positions=positions,
-                showmeans=True,
-                showmedians=True,
-                widths=0.7,
+        if not all_labels:
+            print("[Warning] No valid class data for combined plot. Skipping.")
+            return
+
+        os.makedirs(outdir, exist_ok=True)
+        metric_label = self._metric_axis_label(metric)
+        city_order = [city_data["city"] for city_data in city_data_list]
+
+        class_panels: List[Tuple[str, List[Tuple[str, Optional[np.ndarray]]]]] = []
+        for label in all_labels:
+            entries_map = dict(class_city_data.get(label, []))
+            aligned_entries = [(city, entries_map.get(city)) for city in city_order]
+            if any(values is not None and len(values) > 0 for _, values in aligned_entries):
+                class_panels.append((label, aligned_entries))
+
+        if not class_panels:
+            return
+
+        self._plot_all_classes_in_one_figure(
+            class_panels,
+            metric,
+            metric_label,
+            class_map,
+            outdir,
+            city_order,
+        )
+
+    def _plot_all_classes_in_one_figure(
+        self,
+        class_panels: List[Tuple[str, List[Tuple[str, Optional[np.ndarray]]]]],
+        metric: str,
+        metric_label: str,
+        class_map: Optional[Dict[int, str]],
+        outdir: str,
+        city_order: List[str],
+    ) -> None:
+        """Save all land-use class panels in a single vertically stacked image."""
+        n_classes = len(class_panels)
+        n_cities = len(city_order)
+        fig, axes = plt.subplots(
+            n_classes,
+            1,
+            figsize=(max(14, 2.5 * n_cities), 5 * n_classes),
+            sharex=True,
+            layout="constrained",
+        )
+        if n_classes == 1:
+            axes = [axes]
+
+        for idx, (ax, (class_label, city_entries)) in enumerate(
+            zip(axes, class_panels)
+        ):
+            self._draw_class_panel_on_ax(
+                ax,
+                city_entries,
+                class_label,
+                metric_label,
+                class_map,
+                show_xlabel=(idx == n_classes - 1),
             )
+            if idx < n_classes - 1:
+                ax.tick_params(labelbottom=False)
 
-            # Style violin plot
-            self._style_violin_plot(parts, labels, class_map)
-
-            # Configure axes
-            ax.set_xticks(positions)
-            ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=9)
-            if idx % n_cols == 0:  # Leftmost column
-                ax.set_ylabel(rotulo_metrica(metric), fontsize=11, fontweight="bold")
-            ax.set_title(city, fontsize=12, fontweight="bold", pad=10)
-            ax.grid(axis="y", alpha=0.3, linestyle="--")
-            ax.set_axisbelow(True)
-
-            # Add statistical annotation
-            if annotation is not None:
-                self._add_statistical_annotation(ax, annotation)
-
-        # Hide extra subplots if any
-        for idx in range(n_cities, len(axes)):
-            axes[idx].set_visible(False)
-
-        # Add overall title
         fig.suptitle(
-            f"Distribuição de {rotulo_metrica(metric)} por classe de uso do solo — todas as cidades",
+            f"Distribuição de {metric_label} por classe de uso do solo — todas as cidades",
             fontsize=16,
             fontweight="bold",
-            y=0.995,
+        )
+        filename = f"all_classes_{metric}_{self._plot_extension}_by_class.png"
+        plt.savefig(os.path.join(outdir, filename), dpi=200)
+        plt.close()
+        print(f"[OK] {self._plot_extension} plot generated: {filename}")
+
+    def _draw_class_panel_on_ax(
+        self,
+        ax: plt.Axes,
+        city_entries: List[Tuple[str, Optional[np.ndarray]]],
+        class_label: str,
+        metric_label: str,
+        class_map: Optional[Dict[int, str]],
+        show_xlabel: bool = True,
+    ) -> None:
+        """Draw one land-use class panel with one distribution per city."""
+        color = self._get_class_colors_for_labels([class_label], class_map)[0]
+        city_names: List[str] = []
+        groups_for_test: List[np.ndarray] = []
+
+        for idx, (city, values) in enumerate(city_entries):
+            city_names.append(city)
+            if values is None or len(values) == 0:
+                continue
+            self._plot_single_distribution(ax, values, color, idx)
+            groups_for_test.append(values)
+
+        ax.set_xlim(-0.5, len(city_names) - 0.5)
+        ax.set_xticks(np.arange(len(city_names)))
+        ax.set_xticklabels(city_names, rotation=45, ha="right")
+        if show_xlabel:
+            ax.set_xlabel("Cidade", fontsize=12, fontweight="bold")
+        ax.set_ylabel(metric_label, fontsize=11, fontweight="bold")
+        ax.set_title(class_label, fontsize=12, fontweight="bold", loc="left")
+        ax.grid(axis="y", alpha=0.3, linestyle="--")
+        ax.set_axisbelow(True)
+
+        annotation = self._kruskal_annotation_for_groups(groups_for_test)
+        if annotation is not None:
+            self._add_statistical_annotation(ax, annotation)
+
+    def _plot_class_across_cities(
+        self,
+        city_entries: List[Tuple[str, np.ndarray]],
+        class_label: str,
+        metric: str,
+        metric_label: str,
+        class_map: Optional[Dict[int, str]],
+        outdir: str,
+    ) -> None:
+        """Plot one land-use class with one distribution per city (standalone file)."""
+        n_cities = len(city_entries)
+        fig, ax = plt.subplots(figsize=(max(14, 2.5 * n_cities), 8))
+        self._draw_class_panel_on_ax(
+            ax,
+            city_entries,
+            class_label,
+            metric_label,
+            class_map,
+            show_xlabel=True,
+        )
+        ax.set_title(
+            f"{class_label}: distribuição de {metric_label} — todas as cidades",
+            fontsize=14,
+            fontweight="bold",
+            pad=20,
         )
 
-        # Adjust layout and save
-        plt.tight_layout(rect=[0, 0, 1, 0.99])  # Leave space for suptitle
-        os.makedirs(outdir, exist_ok=True)
-        filename = f"all_cities_{metric}_violin_combined.png"
+        plt.tight_layout()
+        slug = self._slugify_label(class_label)
+        filename = f"{slug}_{metric}_{self._plot_extension}_by_class.png"
         plt.savefig(os.path.join(outdir, filename), dpi=200, bbox_inches="tight")
         plt.close()
-        print(f"[OK] Combined violin plot generated: {filename}")
+        print(f"[OK] {self._plot_extension} plot generated: {filename}")
 
     def _prepare_data_for_plotting(
         self,
@@ -471,10 +507,212 @@ class ViolinPlotter(BasePlotter):
                 )
                 data_by_class[label] = class_values
 
-        # Get ordered labels
-        labels = sorted(data_by_class.keys())
+        # Get ordered labels (same order as stacked bar legend)
+        labels = self._order_class_labels(list(data_by_class.keys()))
 
         return data_by_class, labels
+
+    def _order_class_labels(self, labels: List[str]) -> List[str]:
+        """Order class labels consistently with the stacked bar chart legend."""
+        ordered = [label for label in LULC_LEGEND_ORDER if label in labels]
+        extras = sorted(label for label in labels if label not in LULC_LEGEND_ORDER)
+        return ordered + extras
+
+    def _merge_class_labels(
+        self, existing: List[str], new_labels: List[str]
+    ) -> List[str]:
+        """Merge class label lists preserving legend order."""
+        merged = list(existing)
+        for label in self._order_class_labels(new_labels):
+            if label not in merged:
+                merged.append(label)
+        return merged
+
+    def _plot_single_distribution(
+        self,
+        ax: plt.Axes,
+        data: np.ndarray,
+        color: str,
+        position: float,
+        width: float = 0.7,
+    ) -> None:
+        """Draw a single violin or box plot at one x position."""
+        if self._plot_extension == "box":
+            bp = ax.boxplot(
+                [data],
+                positions=[position],
+                widths=width,
+                patch_artist=True,
+                showfliers=False,
+                manage_ticks=False,
+            )
+            bp["boxes"][0].set_facecolor(color)
+            bp["boxes"][0].set_alpha(0.7)
+            bp["boxes"][0].set_edgecolor("black")
+            for element in ("whiskers", "caps", "medians"):
+                for line in bp[element]:
+                    line.set_color("black")
+                    line.set_linewidth(1)
+        else:
+            parts = ax.violinplot(
+                [data],
+                positions=[position],
+                showmeans=True,
+                showmedians=True,
+                widths=width,
+            )
+            parts["bodies"][0].set_facecolor(color)
+            parts["bodies"][0].set_alpha(0.7)
+            parts["bodies"][0].set_edgecolor("black")
+            parts["bodies"][0].set_linewidth(1)
+            for key in ("cmeans", "cmedians", "cbars", "cmins", "cmaxes"):
+                if key not in parts:
+                    continue
+                element = parts[key]
+                if isinstance(element, list):
+                    for line in element:
+                        line.set_color("black")
+                        line.set_linewidth(1)
+                else:
+                    element.set_color("black")
+                    element.set_linewidth(1)
+
+    def _slugify_label(self, label: str) -> str:
+        """Convert a class label into a filesystem-safe slug."""
+        slug = label.strip().lower()
+        slug = (
+            slug.replace("á", "a")
+            .replace("ã", "a")
+            .replace("â", "a")
+            .replace("é", "e")
+            .replace("ê", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ô", "o")
+            .replace("ú", "u")
+            .replace("ç", "c")
+        )
+        slug = re.sub(r"[^\w]+", "_", slug)
+        return slug.strip("_")
+
+    def _kruskal_annotation_for_groups(
+        self, groups: List[np.ndarray]
+    ) -> Optional[Dict]:
+        """Run Kruskal-Wallis across city groups for a single land-use class."""
+        valid_groups = [group for group in groups if len(group) > 0]
+        if len(valid_groups) < 2:
+            return None
+
+        result = kruskal(*valid_groups)
+        p_global = result.pvalue
+        n_total = sum(len(group) for group in valid_groups)
+        h_stat = result.statistic
+        efeito = h_stat / (n_total - 1) if n_total > 1 else np.nan
+
+        return {
+            "teste_global": "Kruskal–Wallis",
+            "p_global": float(p_global),
+            "efeito": float(efeito) if not np.isnan(efeito) else np.nan,
+        }
+
+    def _plot_stacked_distributions(
+        self,
+        ax: plt.Axes,
+        data_by_class: Dict[str, np.ndarray],
+        labels: List[str],
+        class_map: Optional[Dict[int, str]],
+        position: float,
+        width: float = 0.8,
+    ) -> None:
+        """Draw all land-use classes overlaid at a single x position (one city column)."""
+        dataset = [data_by_class[label] for label in labels]
+        positions = [position] * len(labels)
+        if self._plot_extension == "box":
+            self._draw_stacked_boxes(ax, dataset, positions, labels, class_map, width)
+        else:
+            parts = ax.violinplot(
+                dataset,
+                positions=positions,
+                showmeans=False,
+                showmedians=False,
+                widths=width,
+            )
+            self._style_violin_plot(parts, labels, class_map)
+
+    def _draw_stacked_boxes(
+        self,
+        ax: plt.Axes,
+        dataset: List[np.ndarray],
+        positions: List[float],
+        labels: List[str],
+        class_map: Optional[Dict[int, str]],
+        width: float,
+    ) -> None:
+        """Draw overlapping box plots for each land-use class at one x position."""
+        colors = self._get_class_colors_for_labels(labels, class_map)
+        bp = ax.boxplot(
+            dataset,
+            positions=positions,
+            widths=width,
+            patch_artist=True,
+            showfliers=False,
+            manage_ticks=False,
+        )
+        for box, color in zip(bp["boxes"], colors):
+            box.set_facecolor(color)
+            box.set_alpha(0.7)
+            box.set_edgecolor("black")
+        for element in ("whiskers", "caps", "medians"):
+            for line in bp[element]:
+                line.set_color("black")
+                line.set_linewidth(1)
+
+    def _get_class_colors_for_labels(
+        self, labels: List[str], class_map: Optional[Dict[int, str]]
+    ) -> List[str]:
+        """Resolve plot colors for a list of class labels."""
+        colors = []
+        for label in labels:
+            class_code = None
+            if class_map:
+                for code, name in class_map.items():
+                    if name == label:
+                        class_code = code
+                        break
+            else:
+                try:
+                    class_code = int(label)
+                except ValueError:
+                    pass
+
+            if class_code is not None and class_code in CLASS_COLORS:
+                colors.append(CLASS_COLORS[class_code])
+            else:
+                colors.append(DEFAULT_CLASS_COLORS[len(colors) % len(DEFAULT_CLASS_COLORS)])
+        return colors
+
+    def _add_class_legend(
+        self,
+        ax: plt.Axes,
+        labels: List[str],
+        class_map: Optional[Dict[int, str]],
+    ) -> None:
+        """Add a land-use class legend matching the stacked bar chart style."""
+        colors = self._get_class_colors_for_labels(labels, class_map)
+        handles = [
+            Patch(facecolor=color, edgecolor="black", alpha=0.7, label=label)
+            for label, color in zip(labels, colors)
+        ]
+        ax.legend(
+            handles,
+            labels,
+            title="Classe de uso do solo",
+            bbox_to_anchor=(1.05, 1),
+            loc="upper left",
+            frameon=True,
+            fancybox=True,
+            shadow=True,
+        )
 
     def _style_violin_plot(
         self,
@@ -490,26 +728,7 @@ class ViolinPlotter(BasePlotter):
             class_map: Optional mapping from class codes to names
         """
         # Get colors for each class
-        colors = []
-        for label in labels:
-            # Try to find class code from label
-            class_code = None
-            if class_map:
-                for code, name in class_map.items():
-                    if name == label:
-                        class_code = code
-                        break
-            else:
-                try:
-                    class_code = int(label)
-                except ValueError:
-                    pass
-
-            # Get color from constants
-            if class_code is not None and class_code in CLASS_COLORS:
-                colors.append(CLASS_COLORS[class_code])
-            else:
-                colors.append(DEFAULT_CLASS_COLORS[len(colors) % len(DEFAULT_CLASS_COLORS)])
+        colors = self._get_class_colors_for_labels(labels, class_map)
 
         # Apply colors to violin plot parts
         for i, (pc, color) in enumerate(zip(parts["bodies"], colors)):
@@ -528,6 +747,10 @@ class ViolinPlotter(BasePlotter):
         test_name = annotation.get("teste_global", "")
         p = annotation.get("p_global", np.nan)
         eff = annotation.get("efeito", np.nan)
+        if isinstance(p, np.generic):
+            p = float(p)
+        if isinstance(eff, np.generic):
+            eff = float(eff)
 
         # Format p-value
         p_txt = (
@@ -560,6 +783,34 @@ class ViolinPlotter(BasePlotter):
             ),
             fontsize=10,
         )
+
+    def _add_city_statistical_annotation(
+        self, ax: plt.Axes, x_pos: float, annotation: Dict
+    ) -> None:
+        """Add compact Kruskal-Wallis results above a city column."""
+        p = annotation.get("p_global", np.nan)
+        if not isinstance(p, float) or np.isnan(p):
+            return
+
+        p_txt = "p < 0.001" if p < 0.001 else f"p = {p:.3f}"
+        sig = " ★" if p < self.config.alpha else ""
+        y_pos = ax.get_ylim()[1]
+
+        ax.text(
+            x_pos,
+            y_pos,
+            f"{p_txt}{sig}",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            color="dimgray",
+        )
+
+
+class BoxPlotter(ViolinPlotter):
+    """Generates box plots for comparing distributions across classes."""
+
+    _plot_extension = "box"
 
 
 class StackedBarPlotter:
@@ -917,7 +1168,7 @@ class Plotter:
         if plot_type == "bar":
             return BarPlotter(self.config)
         elif plot_type == "box":
-            return BoxPlotter()
+            return BoxPlotter(self.config)
         elif plot_type == "violin":
             return ViolinPlotter(self.config)
         elif plot_type == "stacked_bar":

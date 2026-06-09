@@ -73,6 +73,7 @@ class ConfiguracaoUsuario:
     sankey_usar_porcentagem: bool = True
     moran_resolucao_nativa: bool = True
     moran_salvar_grafico_dispersao: bool = True
+    fracao_carbono_biomassa: float = 0.47
     mapa_classes: Dict[int, str] = field(default_factory=dict)
 
 
@@ -199,8 +200,7 @@ def _imprimir_resumo_saida(paths: PathsConfig, analises: Dict[str, bool]) -> Non
     print("  Resumo dos resultados")
     print("=" * 60)
     if analises["grafico_biomassa"]:
-        print(f"  • Gráficos de biomassa: {paths.outdir}/*_violin.png (e similares)")
-        print(f"  • Gráfico combinado: {paths.outdir}/all_cities_*_violin_combined.png")
+        print(f"  • Gráficos de biomassa: {paths.outdir}/all_classes_*_by_class.png")
     if analises["diagrama_fluxo"]:
         print(f"  • Diagramas Sankey: {paths.outdir}/sankey/")
     if analises["barras_uso_solo"]:
@@ -255,6 +255,7 @@ def executar_analises(cfg: ConfiguracaoUsuario) -> None:
         config.save_csv_files = False
         config.run_inferential_tests = False
         config.exclude_classes = excluir_biomassa
+        config.biomass_carbon_fraction = cfg.fracao_carbono_biomassa
         AnalysisPipeline(config).run_violin_plots_analysis(
             class_raster_path=paths.class_raster_path,
             biomass_raster_path=paths.biomass_raster_path,
@@ -279,6 +280,7 @@ def executar_analises(cfg: ConfiguracaoUsuario) -> None:
         config.save_csv_files = False
         config.run_inferential_tests = False
         config.exclude_classes = excluir_fluxo
+        config.biomass_carbon_fraction = cfg.fracao_carbono_biomassa
         AnalysisPipeline(config).run_sankey_analysis(
             class_raster_path=paths.class_raster_path,
             biomass_raster_path=paths.biomass_raster_path,
@@ -332,6 +334,7 @@ def executar_analises(cfg: ConfiguracaoUsuario) -> None:
             permutations=999,
             contiguity="rook",
             save_scatter_plots=cfg.moran_salvar_grafico_dispersao,
+            biomass_carbon_fraction=cfg.fracao_carbono_biomassa,
         )
         df = run_moran_analysis(paths, moran_cfg)
         if not df.empty:

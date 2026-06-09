@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
+from .utils.constants import DEFAULT_BIOMASS_CARBON_FRACTION
+
 
 @dataclass
 class PathsConfig:
@@ -24,6 +26,7 @@ class MoranConfig:
     permutations: int = 999
     contiguity: str = "rook"  # rook | queen
     save_scatter_plots: bool = True
+    biomass_carbon_fraction: float = DEFAULT_BIOMASS_CARBON_FRACTION
 
 
 @dataclass
@@ -58,6 +61,10 @@ class AnalysisConfig:
     min_n_for_tests: int = 10
     alpha: float = 0.05
     rng_seed: int = 42
+
+    # Biomass → carbon stock (values multiplied by this factor before analysis/plots).
+    # Set to 1.0 when biomass_raster_path already contains carbon stock.
+    biomass_carbon_fraction: float = DEFAULT_BIOMASS_CARBON_FRACTION
 
     def __post_init__(self):
         """Initialize default values for mutable fields."""

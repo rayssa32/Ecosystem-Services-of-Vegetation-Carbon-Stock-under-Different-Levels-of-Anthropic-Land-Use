@@ -12,6 +12,7 @@ from ..config import PathsConfig, MoranConfig
 from ..data.raster_loader import RasterLoader
 from ..data.vector_loader import VectorLoader
 from ..processing.moran import moran_global, moran_scatter_plot
+from ..utils.constants import scale_biomass
 
 
 def run_moran_analysis(
@@ -93,6 +94,9 @@ def _process_cities(
             biomass_clip = loader.clip_metric_raster(
                 src_biomass, src_class, geom, class_transform, class_clip.shape,
             )
+        biomass_clip = scale_biomass(
+            biomass_clip, moran_cfg.biomass_carbon_fraction
+        )
 
         try:
             mi, y, w = moran_global(
@@ -124,7 +128,11 @@ def _process_cities(
             moran_scatter_plot(
                 mi,
                 title=city,
-                xlabel="Biomassa (padronizada)",
+                xlabel=(
+                    "Carbono (padronizado)"
+                    if moran_cfg.biomass_carbon_fraction != 1.0
+                    else "Biomassa (padronizada)"
+                ),
                 ylabel="Lag espacial (W·z)",
                 save_path=plot_path,
             )
