@@ -205,6 +205,7 @@ def _imprimir_resumo_saida(paths: PathsConfig, analises: Dict[str, bool]) -> Non
         print(f"  • Diagramas Sankey: {paths.outdir}/sankey/")
     if analises["barras_uso_solo"]:
         print(f"  • Barras de uso do solo: {paths.outdir}/stacked_bar_land_use_percentage.png")
+        print(f"  • Planilha de cobertura: {paths.outdir}/stacked_bar_land_use_percentage.xlsx")
         print(f"  • CSVs de estatísticas: {paths.outdir}/*_stats_por_classe.csv")
     if analises["indice_shannon"]:
         print(f"  • Índices Shannon/Pielou: {paths.outdir}/ (arquivos CSV)")

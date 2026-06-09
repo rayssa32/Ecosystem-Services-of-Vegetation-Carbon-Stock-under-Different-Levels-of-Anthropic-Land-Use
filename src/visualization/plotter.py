@@ -870,6 +870,8 @@ class StackedBarPlotter:
 
         # Create and configure plot
         fig, ax = self._create_plot(pivot_df, colors)
+        if value_type == "percentage" or normalize:
+            self._add_segment_percentage_labels(ax, colors)
         self._configure_plot_axes(ax, metric, value_type, normalize)
         legend_order = (
             [c for c in LULC_LEGEND_ORDER if c in pivot_df.columns]
@@ -1043,6 +1045,45 @@ class StackedBarPlotter:
         )
 
         return fig, ax
+
+    @staticmethod
+    def _contrast_text_color(hex_color: str) -> str:
+        """Pick black or white text for readability on a filled bar segment."""
+        color = hex_color.lstrip("#")
+        if len(color) != 6:
+            return "black"
+        r = int(color[0:2], 16)
+        g = int(color[2:4], 16)
+        b = int(color[4:6], 16)
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        return "white" if luminance < 0.55 else "black"
+
+    def _add_segment_percentage_labels(
+        self,
+        ax: plt.Axes,
+        colors: List[str],
+        min_pct: float = 3.0,
+    ) -> None:
+        """Annotate each stacked segment with its percentage value."""
+        for container, color in zip(ax.containers, colors):
+            text_color = self._contrast_text_color(color)
+            for rect in container:
+                height = rect.get_height()
+                if height < min_pct:
+                    continue
+                x = rect.get_x() + rect.get_width() / 2
+                y = rect.get_y() + height / 2
+                label = f"{height:.1f}%" if height < 10 else f"{height:.0f}%"
+                ax.text(
+                    x,
+                    y,
+                    label,
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color=text_color,
+                    fontweight="bold",
+                )
 
     def _configure_plot_axes(
         self, ax: plt.Axes, metric: str, value_type: str, normalize: bool

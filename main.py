@@ -38,7 +38,7 @@ PRESET = None
 # ---- Passo 4: o que gerar? (True = sim, False = não) ----
 # Ignorado se PRESET estiver definido acima.
 
-GERAR_GRAFICO_BIOMASSA_POR_USO = True
+GERAR_GRAFICO_BIOMASSA_POR_USO = False
 # Saída: dados_gerados/all_classes_Carbono_box_by_class.png (com fração ≠ 1)
 
 GERAR_DIAGRAMA_FLUXO = False

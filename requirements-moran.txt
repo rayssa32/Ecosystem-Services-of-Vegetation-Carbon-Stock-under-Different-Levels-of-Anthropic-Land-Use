@@ -20,3 +20,4 @@ scikit-posthocs
 affine
 matplotlib
 plotly
+openpyxl
